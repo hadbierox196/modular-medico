@@ -274,7 +274,7 @@ export default function Practice() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Pill t={t} tone="muted">{SUBJECT_META[setRef.subjectId as keyof typeof SUBJECT_META]?.label}</Pill>
+        <Pill t={t} tone="muted">{SUBJECT_META[setRef.subjectId as keyof typeof SUBJECT_META]?.label || "Quiz"}</Pill>
         <Pill t={t} tone="purple">{setRef.moduleName} \u00b7 Block {setRef.block}</Pill>
         {requeueCount[qIndex] > 0 && <Pill t={t} tone="gold">Review</Pill>}
       </div>

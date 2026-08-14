@@ -10,6 +10,7 @@ import { THEME, FONT_DISPLAY, FONT_MONO } from "../theme";
 import { useAppStore, useIsLoggedIn, useIsPremium } from "../store/useAppStore";
 import { SUBJECT_LIST, SUBJECT_META } from "../data/subjects";
 import { db } from "../firebase";
+import { DEFAULT_QUESTIONS } from "../data/defaultCurriculum";
 import type { FirestoreQuestion, PracticeConfig } from "../types";
 
 export default function Builder() {
@@ -20,7 +21,7 @@ export default function Builder() {
   const isPremium = useIsPremium();
   const t = isDark ? THEME.dark : THEME.light;
 
-  const [picked, setPicked] = useState<string[]>(["anatomy"]);
+  const [picked, setPicked] = useState<string[]>([SUBJECT_LIST[0]]);
   const [count, setCount] = useState(5);
   const [timeLimit, setTimeLimit] = useState(false);
   const [pool, setPool] = useState<FirestoreQuestion[]>([]);
@@ -36,7 +37,22 @@ export default function Builder() {
     setLoading(true);
     const q = query(collection(db, "questions"), where("subjectId", "in", picked.slice(0, 10)), where("status", "==", "published"));
     getDocs(q)
-      .then((snap) => setPool(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<FirestoreQuestion, "id">) }))))
+      .then((snap) => {
+        const fsQuestions = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<FirestoreQuestion, "id">) }));
+        const defQuestions = DEFAULT_QUESTIONS.filter((dq) => picked.includes(dq.subjectId) && dq.status === "published");
+        const combined = [...fsQuestions];
+        const existingIds = new Set(fsQuestions.map((x) => x.q.trim().toLowerCase()));
+        defQuestions.forEach((dq) => {
+          if (!existingIds.has(dq.q.trim().toLowerCase())) {
+            combined.push(dq);
+          }
+        });
+        setPool(combined);
+      })
+      .catch((err) => {
+        console.warn("Firestore builder pool fallback:", err);
+        setPool(DEFAULT_QUESTIONS.filter((dq) => picked.includes(dq.subjectId) && dq.status === "published"));
+      })
       .finally(() => setLoading(false));
   }, [picked]);
 
@@ -48,7 +64,7 @@ export default function Builder() {
     const config: PracticeConfig = { mode: "traditional", timing: timeLimit ? "timed" : "untimed", spacedRep: true, difficultyFilter: "all" };
     startSession(
       {
-        subjectId: picked[0] || "anatomy",
+        subjectId: picked[0] || SUBJECT_LIST[0],
         moduleId: "custom",
         moduleName: "Custom quiz",
         block: 0,

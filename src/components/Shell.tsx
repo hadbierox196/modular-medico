@@ -11,7 +11,6 @@ import {
   X,
   Flame,
   Wand2,
-  ShieldCheck,
   LogOut,
 } from "lucide-react";
 import Logomark from "./Logomark";
@@ -114,9 +113,6 @@ export default function Shell() {
                 <User size={15} /> Log in
               </NavLink>
             )}
-            <button onClick={() => navigate("/admin-gate")} className="flex items-center gap-2 px-3 text-xs" style={{ color: t.textFaint }}>
-              <ShieldCheck size={13} /> Staff / admin access
-            </button>
           </div>
         </aside>
 
@@ -126,7 +122,7 @@ export default function Shell() {
             <div className="absolute right-0 top-0 h-full w-64 p-5" style={{ backgroundColor: t.surface, borderLeft: `1.5px solid ${t.border}` }} onClick={(e) => e.stopPropagation()}>
               <div className="mb-6 flex items-center justify-between">
                 <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700 }}>Menu</span>
-                <button onClick={() => setMenuOpen(false)}>
+                <button onClick={() => setMenuOpen(false)} aria-label="Close menu">
                   <X size={18} />
                 </button>
               </div>
@@ -152,32 +148,22 @@ export default function Shell() {
                     <User size={16} /> Log in
                   </NavLink>
                 )}
-                <button
-                  onClick={() => {
-                    navigate("/admin-gate");
-                    setMenuOpen(false);
-                  }}
-                  className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-xs"
-                  style={{ color: t.textFaint }}
-                >
-                  <ShieldCheck size={14} /> Staff / admin access
-                </button>
               </nav>
             </div>
           </div>
         )}
 
-        <main className="min-h-[calc(100vh-61px-70px)] w-full px-4 pb-8 pt-6 md:min-h-[calc(100vh-61px)] md:px-8 md:pb-14">
+        <main className="w-full flex-1 px-4 pt-4 pb-36 sm:pb-40 md:px-8 md:pt-6 md:pb-16 min-h-[calc(100vh-61px)] overflow-x-hidden">
           <Outlet />
         </main>
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around py-2 md:hidden" style={{ backgroundColor: t.surface, borderTop: `1.5px solid ${t.border}` }}>
+      <nav className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around py-2 px-2 pb-[max(0.625rem,env(safe-area-inset-bottom))] md:hidden backdrop-blur-md" style={{ backgroundColor: `${t.surface}F0`, borderTop: `1.5px solid ${t.border}` }}>
         {NAV_ITEMS.map((item) => {
           const active = isActive(item.to, item.end);
           if (item.center) {
             return (
-              <button key={item.to} onClick={() => navigate(item.to)} className="flex flex-col items-center gap-1 px-2">
+              <button key={item.to} onClick={() => navigate(item.to)} className="flex flex-col items-center gap-1 px-2 active:scale-95 transition-transform">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full" style={{ backgroundColor: t.gold, marginTop: -18, boxShadow: `0 6px 16px -4px ${t.gold}88` }}>
                   <item.icon size={19} color="#241A08" />
                 </div>
@@ -186,7 +172,7 @@ export default function Shell() {
             );
           }
           return (
-            <button key={item.to} onClick={() => navigate(item.to)} className="flex flex-col items-center gap-1 px-2 py-1">
+            <button key={item.to} onClick={() => navigate(item.to)} className="flex flex-col items-center gap-1 px-2 py-1 active:scale-95 transition-transform">
               <div className="flex h-9 w-9 items-center justify-center rounded-full transition-colors" style={{ backgroundColor: active ? t.purpleStrong : "transparent" }}>
                 <item.icon size={17} color={active ? "#fff" : t.textMuted} />
               </div>

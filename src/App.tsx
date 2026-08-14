@@ -34,8 +34,15 @@ export default function App() {
   // Keep the store in sync with Firebase Auth for the lifetime of the app.
   useEffect(() => {
     const unsub = subscribeAuth((user) => {
-      setAuthUser(user?.uid ?? null, user?.email ?? null, user?.displayName ?? "");
-      if (!user) setProfile(null);
+      if (user) {
+        setAuthUser(user.uid, user.email, user.displayName ?? "");
+      } else {
+        const currentUid = useAppStore.getState().uid;
+        if (!currentUid || !currentUid.startsWith("demo_")) {
+          setAuthUser(null, null, "");
+          setProfile(null);
+        }
+      }
       setAuthReady(true);
     });
     return unsub;
@@ -43,7 +50,7 @@ export default function App() {
 
   // Once signed in, keep the Firestore profile (streak, daily goal, premium status) live.
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || uid.startsWith("demo_")) return;
     const unsub = subscribeUserProfile(uid, setProfile);
     return unsub;
   }, [uid, setProfile]);

@@ -36,7 +36,7 @@ export default function Results() {
     <div className="mx-auto flex max-w-xl flex-col gap-6">
       <div className="text-center">
         <Pill t={t} tone="muted">
-          {SUBJECT_META[setRef.subjectId as keyof typeof SUBJECT_META]?.label} \u00b7 {setRef.moduleName}
+          {SUBJECT_META[setRef.subjectId as keyof typeof SUBJECT_META]?.label || "Quiz"} &bull; {setRef.moduleName}
         </Pill>
         <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, marginTop: 10 }}>{setRef.setTitle} \u2014 complete</h1>
       </div>

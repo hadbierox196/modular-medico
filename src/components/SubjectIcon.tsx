@@ -1,5 +1,5 @@
 import { FONT_DISPLAY } from "../theme";
-import { SUBJECT_META } from "../data/subjects";
+import { SUBJECT_META, type SubjectId } from "../data/subjects";
 
 interface Props {
   id: string;
@@ -8,7 +8,7 @@ interface Props {
 }
 
 export default function SubjectIcon({ id, size = 18, color }: Props) {
-  const meta = (SUBJECT_META as Record<string, { label: string; tag: string }>)[id];
-  const initials = (meta?.label || "?").slice(0, 2).toUpperCase();
-  return <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: size, color }}>{initials}</span>;
+  const meta = SUBJECT_META[id as SubjectId];
+  const short = meta?.short || (meta?.label || id).slice(0, 2).toUpperCase();
+  return <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: size, color }}>{short}</span>;
 }

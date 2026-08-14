@@ -1,0 +1,6 @@
+{
+  "name": "Modular Medico",
+  "description": "MCQ practice app for MBBS students with spaced repetition, OMR-style practice, subject/module organization, and progress tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

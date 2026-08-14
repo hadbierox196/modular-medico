@@ -1,50 +1,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, Lock, Crown } from "lucide-react";
+import { ChevronLeft, Lock, Crown, Layers, ArrowRight } from "lucide-react";
 import Card from "../components/Card";
 import Btn from "../components/Btn";
-import { THEME, FONT_DISPLAY, FONT_MONO } from "../theme";
+import SubjectIcon from "../components/SubjectIcon";
+import { THEME, FONT_DISPLAY } from "../theme";
 import { useAppStore, useIsLoggedIn, useIsPremium } from "../store/useAppStore";
-import { SUBJECT_LIST, SUBJECT_META, TOTAL_BLOCKS } from "../data/subjects";
-import { subscribeModules, subscribeModuleBlockCounts } from "../services/adminContent";
-import type { ModuleDoc } from "../types";
-
-function ModuleBlocks({ subjectId, mod, isPremium, isLoggedIn }: { subjectId: string; mod: ModuleDoc; isPremium: boolean; isLoggedIn: boolean }) {
-  const navigate = useNavigate();
-  const isDark = useAppStore((s) => s.isDark);
-  const t = isDark ? THEME.dark : THEME.light;
-  const [counts, setCounts] = useState<Record<number, number>>({});
-
-  useEffect(() => subscribeModuleBlockCounts(subjectId, mod.id, setCounts), [subjectId, mod.id]);
-
-  return (
-    <div>
-      <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 17, marginBottom: 10 }}>{mod.name}</h2>
-      <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5">
-        {Array.from({ length: TOTAL_BLOCKS }, (_, i) => i + 1).map((block) => {
-          const count = counts[block] || 0;
-          const free = block === 1;
-          const locked = !free && !isPremium;
-          const empty = count === 0;
-          return (
-            <Card
-              key={block}
-              t={t}
-              onClick={!empty && !locked ? () => navigate(`/subjects/${subjectId}/${mod.id}/${block}`) : locked ? () => navigate(isLoggedIn ? "/paywall" : "/signup") : undefined}
-              style={{ padding: 14, textAlign: "center", opacity: empty ? 0.45 : 1 }}
-            >
-              <div className="mb-1 flex items-center justify-center gap-1">
-                <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15 }}>B{block}</span>
-                {locked && !empty && <Lock size={11} color={t.gold} />}
-              </div>
-              <span style={{ fontFamily: FONT_MONO, fontSize: 10.5, color: t.textFaint }}>{count} Qs</span>
-            </Card>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+import {
+  SUBJECT_LIST,
+  SUBJECT_META,
+  DEFAULT_BLOCK_DEFINITIONS,
+  type SubjectId,
+  type BlockDefinition,
+} from "../data/subjects";
+import { subscribeBlockDefinitions, subscribeCurriculumCounts, type CurriculumCounts } from "../services/adminContent";
 
 export default function SubjectDetail() {
   const navigate = useNavigate();
@@ -53,57 +22,185 @@ export default function SubjectDetail() {
   const isLoggedIn = useIsLoggedIn();
   const isPremium = useIsPremium();
   const t = isDark ? THEME.dark : THEME.light;
-  const [modules, setModules] = useState<ModuleDoc[]>([]);
+  const [blockDefs, setBlockDefs] = useState<BlockDefinition[]>(DEFAULT_BLOCK_DEFINITIONS);
+  const [counts, setCounts] = useState<CurriculumCounts>({
+    blockCounts: {},
+    moduleCounts: {},
+    subjectInModuleCounts: {},
+    subjectTotalCounts: {},
+  });
 
-  useEffect(() => subscribeModules(subjectId, setModules), [subjectId]);
+  useEffect(() => subscribeBlockDefinitions(setBlockDefs), []);
+  useEffect(() => subscribeCurriculumCounts(setCounts), []);
 
   if (!(SUBJECT_LIST as readonly string[]).includes(subjectId)) {
     return (
       <div className="py-16 text-center">
         <p style={{ color: t.textMuted }}>Subject not found.</p>
         <button onClick={() => navigate("/subjects")} className="mt-3 text-sm font-bold" style={{ color: t.teal }}>
-          Back to subjects
+          Back to curriculum explorer
         </button>
       </div>
     );
   }
 
-  const meta = SUBJECT_META[subjectId as keyof typeof SUBJECT_META];
+  const meta = SUBJECT_META[subjectId as SubjectId];
+
+  // Find all modules across all blocks that teach this subject
+  const moduleAppearances: Array<{
+    block: BlockDefinition;
+    module: { id: string; name: string; description?: string };
+    questionCount: number;
+    locked: boolean;
+  }> = [];
+
+  blockDefs.forEach((b) => {
+    b.modules?.forEach((m) => {
+      if (m.subjects.includes(subjectId as SubjectId)) {
+        const count = counts.subjectInModuleCounts[`${b.block}-${m.id}-${subjectId}`] || 0;
+        const locked = b.block !== 1 && !isPremium;
+        moduleAppearances.push({
+          block: b,
+          module: m,
+          questionCount: count,
+          locked,
+        });
+      }
+    });
+  });
+
+  const totalSubjectQuestions = counts.subjectTotalCounts[subjectId] || 0;
 
   return (
-    <div>
-      <button onClick={() => navigate("/subjects")} className="mb-4 flex items-center gap-1 text-sm font-bold" style={{ color: t.textMuted }}>
-        <ChevronLeft size={15} /> Subjects
+    <div className="flex flex-col gap-6">
+      <button
+        onClick={() => navigate("/subjects")}
+        className="flex items-center gap-1 text-sm font-bold self-start"
+        style={{ color: t.textMuted }}
+      >
+        <ChevronLeft size={15} /> Curriculum Explorer
       </button>
-      <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 27, marginBottom: 2 }}>{meta.label}</h1>
-      <p style={{ color: t.textMuted, fontSize: 14, marginBottom: 8 }}>{meta.tag}</p>
+
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-4">
+          <div
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl"
+            style={{ backgroundColor: `${t.teal}22` }}
+          >
+            <SubjectIcon id={subjectId as SubjectId} color={t.teal} size={24} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26 }}>{meta.label}</h1>
+              <span
+                className="rounded-full px-2.5 py-0.5 font-mono text-xs font-bold"
+                style={{ backgroundColor: `${t.gold}20`, color: t.gold }}
+              >
+                {totalSubjectQuestions} Total Qs
+              </span>
+            </div>
+            <p style={{ color: t.textMuted, fontSize: 14 }}>{meta.tag}</p>
+          </div>
+        </div>
+
+        <Btn
+          t={t}
+          variant="secondary"
+          icon={Layers}
+          onClick={() => navigate("/subjects?view=block")}
+        >
+          View in Block Explorer
+        </Btn>
+      </div>
 
       {!isPremium && (
-        <div className="mb-6 flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs" style={{ backgroundColor: `${t.gold}18`, color: t.goldDeep }}>
-          <Lock size={13} /> Block 1 is free in every module. Unlock Blocks 2\u201315 with Premium.
+        <div className="flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs" style={{ backgroundColor: `${t.gold}18`, color: t.goldDeep }}>
+          <Lock size={13} /> Block 1 is free in every module. Unlock all Blocks (1–15) free during Beta.
           <button onClick={() => navigate(isLoggedIn ? "/paywall" : "/signup")} className="ml-auto font-bold underline">
-            Upgrade
+            Unlock Full Access
           </button>
         </div>
       )}
 
-      {modules.length === 0 ? (
-        <Card t={t} className="text-center">
-          <p className="text-sm" style={{ color: t.textMuted }}>
-            No modules published for {meta.label} yet. Check back soon, or add one from the admin panel.
-          </p>
-        </Card>
-      ) : (
-        <div className="flex flex-col gap-8">
-          {modules.map((m) => (
-            <ModuleBlocks key={m.id} subjectId={subjectId} mod={m} isPremium={isPremium} isLoggedIn={isLoggedIn} />
+      {/* Curriculum Breakdown: Modules & Blocks Teaching This Subject */}
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>
+              Modular Integration ({moduleAppearances.length} Modules across Blocks)
+            </h2>
+            <p style={{ color: t.textMuted, fontSize: 13 }}>
+              In the modular MBBS system, {meta.label} is integrated into specific Block modules:
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {moduleAppearances.map(({ block, module, questionCount, locked }) => (
+            <Card
+              key={`${block.block}-${module.id}`}
+              t={t}
+              onClick={
+                locked
+                  ? () => navigate(isLoggedIn ? "/paywall" : "/signup")
+                  : () => navigate(`/subjects/${subjectId}/${module.id}/${block.block}`)
+              }
+              className="flex flex-col justify-between gap-4 p-5 cursor-pointer transition-all hover:scale-[1.01]"
+              style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}` }}
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
+                      style={{ backgroundColor: `${t.teal}22`, color: t.teal }}
+                    >
+                      Block {block.block}: {block.title}
+                    </span>
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                      style={{ backgroundColor: t.surface, color: t.textFaint }}
+                    >
+                      {block.year}
+                    </span>
+                  </div>
+                  {locked && <Lock size={14} color={t.gold} />}
+                </div>
+
+                <h3 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16 }}>
+                  {module.name}
+                </h3>
+                {module.description && (
+                  <p style={{ color: t.textMuted, fontSize: 12.5, marginTop: 4, lineHeight: 1.4 }}>
+                    {module.description}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between border-t pt-3" style={{ borderColor: t.border }}>
+                <span
+                  className="rounded-full px-2.5 py-0.5 font-mono text-xs font-bold"
+                  style={{
+                    backgroundColor: questionCount > 0 ? `${t.green}20` : t.surface,
+                    color: questionCount > 0 ? t.green : t.textFaint,
+                  }}
+                >
+                  {questionCount} {questionCount === 1 ? "Question" : "Questions"}
+                </span>
+
+                <div className="flex items-center gap-1.5 text-xs font-bold" style={{ color: locked ? t.gold : t.purpleStrong }}>
+                  {locked ? "Unlock" : "Practice Set"}
+                  <ArrowRight size={13} />
+                </div>
+              </div>
+            </Card>
           ))}
         </div>
-      )}
+      </div>
 
       {!isPremium && (
-        <Btn t={t} full icon={Crown} style={{ marginTop: 24 }} onClick={() => navigate(isLoggedIn ? "/paywall" : "/signup")}>
-          Unlock all blocks with Premium
+        <Btn t={t} full icon={Crown} onClick={() => navigate(isLoggedIn ? "/paywall" : "/signup")}>
+          Unlock all blocks & question banks
         </Btn>
       )}
     </div>

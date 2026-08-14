@@ -43,13 +43,20 @@ export async function ensureUserProfile(uid: string, email: string, displayName:
 
 export function subscribeUserProfile(uid: string, cb: (profile: UserProfile | null) => void) {
   const ref = doc(db, "users", uid);
-  return onSnapshot(ref, (snap) => {
-    if (!snap.exists()) {
+  return onSnapshot(
+    ref,
+    (snap) => {
+      if (!snap.exists()) {
+        cb(null);
+        return;
+      }
+      cb({ uid, ...(snap.data() as Omit<UserProfile, "uid">) });
+    },
+    (err) => {
+      console.warn("Firestore subscribeUserProfile error:", err.message);
       cb(null);
-      return;
     }
-    cb({ uid, ...(snap.data() as Omit<UserProfile, "uid">) });
-  });
+  );
 }
 
 /**
@@ -101,16 +108,30 @@ export async function recordQuizAttempt(
 
 export function subscribeRecentAttempts(uid: string, cb: (attempts: AttemptRecord[]) => void) {
   const q = query(collection(db, "users", uid, "attempts"), orderBy("createdAt", "desc"), limit(50));
-  return onSnapshot(q, (snap) => {
-    cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<AttemptRecord, "id">) })));
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<AttemptRecord, "id">) })));
+    },
+    (err) => {
+      console.warn("Firestore subscribeRecentAttempts error:", err.message);
+      cb([]);
+    }
+  );
 }
 
 export function subscribeBookmarks(uid: string, cb: (bookmarks: BookmarkRecord[]) => void) {
   const q = query(collection(db, "users", uid, "bookmarks"), orderBy("createdAt", "desc"));
-  return onSnapshot(q, (snap) => {
-    cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<BookmarkRecord, "id">) })));
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<BookmarkRecord, "id">) })));
+    },
+    (err) => {
+      console.warn("Firestore subscribeBookmarks error:", err.message);
+      cb([]);
+    }
+  );
 }
 
 export async function addBookmark(uid: string, subjectId: string, moduleName: string, block: number, question: MCQ) {
