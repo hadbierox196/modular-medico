@@ -1623,7 +1623,7 @@ export default function AdminPanel() {
           <div className="flex items-center gap-2">
             <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24 }}>Admin Panel</h1>
             <span className="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style={{ backgroundColor: `${t.purple}25`, color: t.purple }}>
-              {email ? `Staff: ${email}` : "Master Access (Irfan@admin)"}
+              {email ? `Staff: ${email}` : "Admin Access"}
             </span>
           </div>
           <p style={{ color: t.textMuted, fontSize: 13 }}>

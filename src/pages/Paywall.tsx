@@ -18,13 +18,12 @@ export default function Paywall() {
   const navigate = useNavigate();
   const isDark = useAppStore((s) => s.isDark);
   const uid = useAppStore((s) => s.uid);
-  const email = useAppStore((s) => s.email);
   const isAdmin = useAppStore((s) => s.isAdmin);
   const unlockFreePremium = useAppStore((s) => s.unlockFreePremium);
   const isPremium = useIsPremium();
   const t = isDark ? THEME.dark : THEME.light;
 
-  const isMaster = isAdmin || (email || "").toLowerCase() === "irfan@admin" || (email || "").toLowerCase() === "irfan@admin.com";
+  const isMaster = isAdmin;
 
   if (!uid) {
     return (
@@ -61,7 +60,7 @@ export default function Paywall() {
           <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24 }}>Full Access Active</h1>
           <p style={{ color: t.textMuted, fontSize: 14, marginTop: 4 }}>
             {isMaster
-              ? "Signed in as Irfan@admin. All question sets, modules, and admin controls are completely unlocked."
+              ? "Signed in with admin access. All question sets, modules, and admin controls are completely unlocked."
               : "All subjects, blocks 1–15, custom quiz builders, and spaced repetition are unlocked."}
           </p>
         </div>

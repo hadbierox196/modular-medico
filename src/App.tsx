@@ -37,11 +37,8 @@ export default function App() {
       if (user) {
         setAuthUser(user.uid, user.email, user.displayName ?? "");
       } else {
-        const currentUid = useAppStore.getState().uid;
-        if (!currentUid || !currentUid.startsWith("demo_")) {
-          setAuthUser(null, null, "");
-          setProfile(null);
-        }
+        setAuthUser(null, null, "");
+        setProfile(null);
       }
       setAuthReady(true);
     });
@@ -50,7 +47,7 @@ export default function App() {
 
   // Once signed in, keep the Firestore profile (streak, daily goal, premium status) live.
   useEffect(() => {
-    if (!uid || uid.startsWith("demo_")) return;
+    if (!uid) return;
     const unsub = subscribeUserProfile(uid, setProfile);
     return unsub;
   }, [uid, setProfile]);

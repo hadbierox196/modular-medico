@@ -130,8 +130,6 @@ export const useIsLoggedIn = () => useAppStore((s) => !!s.uid);
 export const useIsPremium = () =>
   useAppStore((s) => {
     if (s.isAdmin) return true;
-    const em = (s.email || s.profile?.email || "").toLowerCase();
-    if (em === "irfan@admin" || em === "irfan@admin.com" || em.startsWith("irfan@")) return true;
     if (s.profile?.premium) {
       if (!s.profile.premiumExpiry) return true;
       return s.profile.premiumExpiry > Date.now();

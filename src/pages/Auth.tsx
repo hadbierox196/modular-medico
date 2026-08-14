@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { AlertTriangle, Eye, EyeOff, Sparkles, UserCheck } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff } from "lucide-react";
 import Card from "../components/Card";
 import Btn from "../components/Btn";
 import Logomark from "../components/Logomark";
 import { THEME, FONT_DISPLAY, FONT_MONO } from "../theme";
 import { useAppStore } from "../store/useAppStore";
-import { signUp, logIn, loginDemoUser, loginMasterAdmin, authErrorMessage } from "../services/auth";
+import { signUp, logIn, authErrorMessage } from "../services/auth";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -48,11 +48,6 @@ export default function Auth() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDemoLogin = (isPremium = false) => {
-    loginDemoUser(form.name.trim() || (isPremium ? "Dr. Student (Premium)" : "Med Student"), isPremium);
-    navigate("/subjects");
   };
 
   return (
@@ -150,34 +145,6 @@ export default function Auth() {
           {mode === "login" ? "New here? Create a free account" : "Already have an account? Log in"}
         </button>
       </Card>
-
-      <div className="flex flex-col gap-2 rounded-2xl p-4" style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}` }}>
-        <div className="flex items-center gap-1.5 text-xs font-bold" style={{ color: t.gold }}>
-          <Sparkles size={14} /> Quick One-Click Access
-        </div>
-        <p style={{ color: t.textMuted, fontSize: 12, lineHeight: 1.4 }}>
-          Or instantly sign in with one of the pre-configured accounts:
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-          <button
-            onClick={() => {
-              loginMasterAdmin();
-              navigate("/subjects");
-            }}
-            className="flex items-center justify-center gap-1.5 rounded-xl py-2 px-3 text-xs font-bold transition-transform active:scale-95"
-            style={{ backgroundColor: `${t.purple}24`, color: isDark ? "#fff" : t.purpleStrong, border: `1px solid ${t.purple}44` }}
-          >
-            <Sparkles size={13} /> Irfan@admin (Master)
-          </button>
-          <button
-            onClick={() => handleDemoLogin(false)}
-            className="flex items-center justify-center gap-1.5 rounded-xl py-2 px-3 text-xs font-bold transition-transform active:scale-95"
-            style={{ backgroundColor: `${t.teal}20`, color: isDark ? "#fff" : t.teal, border: `1px solid ${t.teal}44` }}
-          >
-            <UserCheck size={13} /> Demo Student
-          </button>
-        </div>
-      </div>
 
       <button onClick={() => navigate("/")} className="text-center text-xs" style={{ color: t.textFaint }}>
         Continue as guest instead

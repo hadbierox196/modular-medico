@@ -5,18 +5,27 @@ import { getFunctions } from "firebase/functions";
 
 // Your web app's Firebase configuration.
 // NOTE: these are public client identifiers (not secrets) — it's normal and expected
-// for them to live in frontend code. Access control is enforced by Firestore
-// security rules (see firestore.rules) and by Cloud Functions, not by hiding this object.
+// for them to live in frontend code / the built JS bundle. Access control is enforced
+// by Firestore security rules (see firestore.rules) and by Cloud Functions, not by
+// hiding this object. They're still pulled from env vars (rather than hardcoded) so
+// each environment (local/staging/prod) can point at its own Firebase project.
 const firebaseConfig = {
-  apiKey: "AIzaSyDS3K9EKXiBcXux7H70EPdCFM7-_ZclLKc",
-  authDomain: "sewask-e3b44.firebaseapp.com",
-  databaseURL: "https://sewask-e3b44-default-rtdb.firebaseio.com",
-  projectId: "sewask-e3b44",
-  storageBucket: "sewask-e3b44.firebasestorage.app",
-  messagingSenderId: "1060036881709",
-  appId: "1:1060036881709:web:a6e5afd2c799b0ee9177a4",
-  measurementId: "G-SYELD4CCST",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
+
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  // Fails loudly at startup instead of a cryptic Firebase SDK error later.
+  throw new Error(
+    "Missing Firebase config. Set VITE_FIREBASE_* environment variables — see .env.example."
+  );
+}
 
 export const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
