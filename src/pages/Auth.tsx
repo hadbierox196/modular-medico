@@ -39,10 +39,11 @@ export default function Auth() {
     try {
       if (mode === "signup") {
         await signUp(form.name, cleanEmail, form.password);
+        navigate("/paywall");
       } else {
         await logIn(cleanEmail, form.password);
+        navigate("/subjects");
       }
-      navigate("/subjects");
     } catch (err) {
       setError(authErrorMessage(err));
     } finally {

@@ -43,7 +43,7 @@ export interface AnswerRecord {
 }
 
 export interface PracticeConfig {
-  mode: "traditional" | "omr";
+  mode: "traditional" | "omr" | "exam";
   timing: "untimed" | "timed";
   spacedRep: boolean;
   difficultyFilter: Difficulty | "all";

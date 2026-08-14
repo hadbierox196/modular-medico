@@ -24,13 +24,21 @@ export default function PracticeSetup() {
   const t = isDark ? THEME.dark : THEME.light;
 
   const [blockDefs, setBlockDefs] = useState<BlockDefinition[]>(DEFAULT_BLOCK_DEFINITIONS);
-  const [mode, setMode] = useState<"traditional" | "omr">("traditional");
+  const [mode, setMode] = useState<"traditional" | "omr" | "exam">("traditional");
   const [timing, setTiming] = useState<"untimed" | "timed">("untimed");
   const [spacedRep, setSpacedRep] = useState(true);
   const [difficulty, setDifficulty] = useState<Difficulty | "all">("all");
   const [showInfo, setShowInfo] = useState(false);
   const [loading, setLoading] = useState(false);
   const [count, setCount] = useState<number | null>(null);
+
+  // Force strict settings in Exam mode
+  useEffect(() => {
+    if (mode === "exam") {
+      setTiming("timed");
+      setSpacedRep(false);
+    }
+  }, [mode]);
 
   useEffect(() => {
     return subscribeBlockDefinitions(setBlockDefs);
@@ -158,14 +166,20 @@ export default function PracticeSetup() {
           <Segmented
             t={t}
             value={mode}
-            onChange={(v) => setMode(v as "traditional" | "omr")}
+            onChange={(v) => setMode(v as "traditional" | "omr" | "exam")}
             options={[
               { value: "traditional", label: "Traditional", icon: ListChecks },
               { value: "omr", label: "OMR sheet", icon: Grid3x3 },
+              { value: "exam", label: "Mock Exam", icon: Timer },
             ]}
           />
+          {mode === "exam" && (
+            <p className="mt-2 text-xs" style={{ color: t.gold }}>
+              Exam mode mimics real test conditions: strict timer, locked feedback, and no repetition.
+            </p>
+          )}
         </div>
-        <div>
+        <div style={{ opacity: mode === "exam" ? 0.5 : 1, pointerEvents: mode === "exam" ? "none" : "auto" }}>
           <span className="mb-2 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>Timing</span>
           <Segmented
             t={t}
@@ -173,7 +187,7 @@ export default function PracticeSetup() {
             onChange={(v) => setTiming(v as "untimed" | "timed")}
             options={[
               { value: "untimed", label: "Untimed", icon: InfinityIcon },
-              { value: "timed", label: "Timed \u00b7 5 min", icon: Timer },
+              { value: "timed", label: mode === "exam" ? "Timed (Strict)" : "Timed (5 min)", icon: Timer },
             ]}
           />
         </div>

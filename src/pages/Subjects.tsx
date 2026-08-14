@@ -10,6 +10,7 @@ import {
   Play,
   ArrowRight,
   FolderTree,
+  Lock,
 } from "lucide-react";
 import Card from "../components/Card";
 import Pill from "../components/Pill";
@@ -170,21 +171,28 @@ export default function Subjects() {
           {/* Block Selector 1–15 */}
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 md:grid-cols-8 lg:grid-cols-15">
             {filteredBlockDefs.map((b) => {
-              const totalInBlock = counts.blockCounts[b.block] || 0;
-              const isSelected = selectedBlockNum === b.block;
-              return (
-                <button
-                  key={b.block}
-                  onClick={() => setSelectedBlockNum(b.block)}
-                  className="flex flex-col items-center justify-center rounded-2xl p-2.5 transition-all text-center hover:scale-[1.02]"
-                  style={{
-                    backgroundColor: isSelected ? t.purpleStrong : t.surfaceAlt,
-                    color: isSelected ? "#fff" : t.text,
-                    border: `1.5px solid ${isSelected ? t.purpleStrong : t.border}`,
-                    boxShadow: isSelected ? `0 4px 14px ${t.purpleStrong}40` : "none",
-                  }}
-                >
-                  <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15 }}>B{b.block}</span>
+                  const totalInBlock = counts.blockCounts[b.block] || 0;
+                  const isSelected = selectedBlockNum === b.block;
+                  const isLocked = b.block !== 1 && !isPremium;
+                  return (
+                    <button
+                      key={b.block}
+                      onClick={() => setSelectedBlockNum(b.block)}
+                      className="flex flex-col items-center justify-center rounded-2xl p-2.5 transition-all text-center hover:scale-[1.02] relative"
+                      style={{
+                        backgroundColor: isSelected ? t.purpleStrong : t.surfaceAlt,
+                        color: isSelected ? "#fff" : t.text,
+                        border: `1.5px solid ${isSelected ? t.purpleStrong : t.border}`,
+                        boxShadow: isSelected ? `0 4px 14px ${t.purpleStrong}40` : "none",
+                        opacity: isLocked ? 0.75 : 1,
+                      }}
+                    >
+                      {isLocked && (
+                        <div className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full shadow-sm" style={{ backgroundColor: t.gold, color: "#fff" }}>
+                          <Lock size={10} fill="#fff" />
+                        </div>
+                      )}
+                      <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15 }}>B{b.block}</span>
                   <span
                     className="truncate max-w-[65px] text-[10px] font-semibold mt-0.5"
                     style={{ color: isSelected ? "#ffffffdd" : t.teal }}
@@ -263,10 +271,10 @@ export default function Subjects() {
                 <Btn
                   t={t}
                   full
-                  icon={Play}
-                  onClick={() => navigate(`/subjects/all/all/${currentBlockDef.block}?fullBlock=true`)}
+                  icon={currentBlockDef.block !== 1 && !isPremium ? Lock : Play}
+                  onClick={() => navigate(currentBlockDef.block !== 1 && !isPremium ? (isLoggedIn ? "/paywall" : "/signup") : `/subjects/all/all/${currentBlockDef.block}?fullBlock=true`)}
                 >
-                  Start Block {currentBlockDef.block} Exam
+                  {currentBlockDef.block !== 1 && !isPremium ? "Unlock Block" : `Start Block ${currentBlockDef.block} Exam`}
                 </Btn>
                 <span className="text-center text-[11px]" style={{ color: t.textFaint }}>
                   Full multi-module exam across all subjects in this block
@@ -331,15 +339,15 @@ export default function Subjects() {
                         {/* Module Exam CTA */}
                         <div className="shrink-0">
                           <button
-                            onClick={() => navigate(`/subjects/all/${mod.id}/${currentBlockDef.block}`)}
+                            onClick={() => navigate(currentBlockDef.block !== 1 && !isPremium ? (isLoggedIn ? "/paywall" : "/signup") : `/subjects/all/${mod.id}/${currentBlockDef.block}`)}
                             className="flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all hover:scale-[1.02]"
                             style={{
-                              backgroundColor: t.purpleStrong,
+                              backgroundColor: currentBlockDef.block !== 1 && !isPremium ? t.gold : t.purpleStrong,
                               color: "#fff",
                             }}
                           >
-                            <Play size={13} fill="#fff" />
-                            Practice Module ({mod.subjects.length} Subjects)
+                            {currentBlockDef.block !== 1 && !isPremium ? <Lock size={13} fill="#fff" /> : <Play size={13} fill="#fff" />}
+                            {currentBlockDef.block !== 1 && !isPremium ? "Unlock Module" : `Practice Module (${mod.subjects.length} Subjects)`}
                           </button>
                         </div>
                       </div>
@@ -358,7 +366,7 @@ export default function Subjects() {
                             return (
                               <div
                                 key={subjId}
-                                onClick={() => navigate(`/subjects/${subjId}/${mod.id}/${currentBlockDef.block}`)}
+                                onClick={() => navigate(currentBlockDef.block !== 1 && !isPremium ? (isLoggedIn ? "/paywall" : "/signup") : `/subjects/${subjId}/${mod.id}/${currentBlockDef.block}`)}
                                 className="flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-all hover:scale-[1.01]"
                                 style={{
                                   backgroundColor: t.surface,
@@ -366,9 +374,14 @@ export default function Subjects() {
                                 }}
                               >
                                 <div
-                                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl relative"
                                   style={{ backgroundColor: `${color}22` }}
                                 >
+                                  {currentBlockDef.block !== 1 && !isPremium && (
+                                    <div className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full" style={{ backgroundColor: t.gold }}>
+                                      <Lock size={8} fill="#fff" color="#fff" />
+                                    </div>
+                                  )}
                                   <SubjectIcon id={subjId} color={color} size={15} />
                                 </div>
                                 <div className="min-w-0 flex-1">

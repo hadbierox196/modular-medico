@@ -1,4 +1,6 @@
-import type { FirestoreQuestion } from "../types";
+import fs from 'fs';
+
+const subjectsCode = `import type { SubjectId } from "../types";
 
 export const SUBJECT_LIST = [
   "gross_anatomy",
@@ -14,10 +16,6 @@ export const SUBJECT_LIST = [
   "medicine",
   "surgery",
 ] as const;
-
-export type SubjectId = typeof SUBJECT_LIST[number];
-
-export const TOTAL_BLOCKS = 15;
 
 export const SUBJECT_META: Record<SubjectId, { label: string; tag: string; short: string; defaultYear: string }> = {
   gross_anatomy: { label: "Gross Anatomy", tag: "Structures, Organs & Bones", short: "GA", defaultYear: "1st Year" },
@@ -274,6 +272,7 @@ export const DEFAULT_SUBJECT_MODULE_IDS: Record<SubjectId, string[]> = {
   surgery: ["mod-18", "mod-25", "mod-26", "mod-27", "mod-30", "mod-31", "mod-33", "mod-34", "mod-35"],
 };
 
+import type { FirestoreQuestion } from "../types";
 
 export interface DefaultModuleDef {
   id: string;
@@ -292,7 +291,7 @@ export function buildDefaultModules(): Record<string, DefaultModuleDef[]> {
         const master = masterMap.get(id);
         if (!master) return null;
         return {
-          id: `${subjectId}-${master.id}`,
+          id: \`\${subjectId}-\${master.id}\`,
           subjectId,
           name: master.name,
           order: index,
@@ -310,42 +309,39 @@ export const DEFAULT_QUESTIONS: FirestoreQuestion[] = [
     id: "q-sample-1",
     subjectId: "gross_anatomy",
     moduleId: "mod-1",
-    moduleName: "Foundation-I",
-    block: 1,
-    difficulty: "medium",
-    status: "published",
-    q: "A 45-year-old male presents with deep tendon reflex abnormalities. Which fundamental anatomical concept relates to the stretch reflex arc?",
+    blockNum: 1,
+    question: "A 45-year-old male presents with deep tendon reflex abnormalities. Which fundamental anatomical concept relates to the stretch reflex arc?",
     options: ["Spinal cord dorsal and ventral roots", "Cranial nerve ganglia", "Autonomic chain ganglia", "Prevertebral ganglia", "Basal ganglia"],
-    correct: 0,
+    correctIndex: 0,
     explanation: "The stretch reflex arc involves afferent sensory neurons entering the spinal cord via dorsal roots and efferent motor neurons exiting via ventral roots.",
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   },
   {
     id: "q-sample-2",
     subjectId: "gross_anatomy",
     moduleId: "mod-1",
-    moduleName: "Foundation-I",
-    block: 1,
-    difficulty: "medium",
-    status: "published",
-    q: "During a surgical procedure, the anatomical snuffbox is exposed. Which of the following bones forms the floor of this structure?",
+    blockNum: 1,
+    question: "During a surgical procedure, the anatomical snuffbox is exposed. Which of the following bones forms the floor of this structure?",
     options: ["Scaphoid", "Lunate", "Triquetrum", "Pisiform", "Hamate"],
-    correct: 0,
+    correctIndex: 0,
     explanation: "The scaphoid and trapezium form the floor of the anatomical snuffbox, which is of clinical importance due to the risk of scaphoid fractures and avascular necrosis.",
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   },
   {
     id: "q-sample-3",
     subjectId: "gross_anatomy",
     moduleId: "mod-1",
-    moduleName: "Foundation-I",
-    block: 1,
-    difficulty: "medium",
-    status: "published",
-    q: "Which specific cell type is primarily responsible for the synthesis of the organic matrix of bone?",
+    blockNum: 1,
+    question: "Which specific cell type is primarily responsible for the synthesis of the organic matrix of bone?",
     options: ["Osteoclasts", "Osteoblasts", "Osteocytes", "Chondrocytes", "Fibroblasts"],
-    correct: 1,
+    correctIndex: 1,
     explanation: "Osteoblasts are responsible for synthesizing osteoid, the unmineralized organic portion of the bone matrix that forms prior to the maturation of bone tissue.",
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   }
 ];
+`
+
+fs.writeFileSync('src/data/subjects.ts', subjectsCode);

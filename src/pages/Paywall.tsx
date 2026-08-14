@@ -89,7 +89,8 @@ export default function Paywall() {
     );
   }
 
-  const handleActivateFreeAccess = () => {
+  const handleActivateSubscription = () => {
+    // Integrate payment logic here, for now it mocks success
     unlockFreePremium();
     navigate("/subjects");
   };
@@ -100,14 +101,14 @@ export default function Paywall() {
         <Crown size={32} color={t.gold} className="mx-auto mb-2" />
         <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26 }}>Full MBBS Access</h1>
         <p style={{ color: t.textMuted, fontSize: 14, marginTop: 4 }}>
-          Payment gateways are currently waived — all modules and questions are completely open.
+          Subscribe securely to unlock all premium content.
         </p>
       </div>
 
       <Card t={t} style={{ borderColor: t.gold }}>
         <div className="mb-3 flex items-center justify-between">
           <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16 }}>Unlimited Practice Tier</span>
-          <Pill t={t} tone="gold">100% Free</Pill>
+          <Pill t={t} tone="gold">PKR 1500 / Year</Pill>
         </div>
         <ul className="flex flex-col gap-2.5">
           {PERKS.map((p) => (
@@ -119,8 +120,8 @@ export default function Paywall() {
       </Card>
 
       <div className="flex flex-col gap-3">
-        <Btn t={t} full icon={Sparkles} onClick={handleActivateFreeAccess}>
-          Activate Full Access Now
+        <Btn t={t} full icon={Sparkles} onClick={handleActivateSubscription}>
+          Subscribe Now
         </Btn>
         <Btn t={t} full variant="ghost" onClick={() => navigate("/subjects")}>
           Return to Subjects
@@ -128,7 +129,7 @@ export default function Paywall() {
       </div>
 
       <p className="text-center text-xs" style={{ color: t.textFaint }}>
-        No payment details or credit cards required. One tap unlocks all content for your account.
+        Payments are processed securely.
       </p>
     </div>
   );

@@ -11,6 +11,7 @@ import {
   X,
   Flame,
   Wand2,
+  Search,
   LogOut,
 } from "lucide-react";
 import Logomark from "./Logomark";
@@ -67,6 +68,14 @@ export default function Shell() {
               <Flame size={12} /> {profile?.streak ?? 0}-day streak
             </span>
           )}
+          <button
+            onClick={() => navigate("/search")}
+            className="flex h-9 w-9 items-center justify-center rounded-full"
+            style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}` }}
+            aria-label="Search"
+          >
+            <Search size={16} color={t.textMuted} />
+          </button>
           <button
             onClick={toggleDark}
             className="flex h-9 w-9 items-center justify-center rounded-full"

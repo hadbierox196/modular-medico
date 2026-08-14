@@ -1,0 +1,10 @@
+export async function fetchAllUserAttempts(uid: string): Promise<AttemptRecord[]> {
+  try {
+    const q = query(collection(db, "users", uid, "attempts"), orderBy("createdAt", "asc"));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<AttemptRecord, "id">) }));
+  } catch (err) {
+    console.error("Failed to fetch all attempts:", err);
+    return [];
+  }
+}

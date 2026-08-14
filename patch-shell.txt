@@ -1,0 +1,25 @@
+--- src/components/Shell.tsx
++++ src/components/Shell.tsx
+@@ -21,8 +21,6 @@
+ const NAV_ITEMS = [
+   { to: "/", label: "Home", icon: HomeIcon, end: true },
+   { to: "/subjects", label: "Practice", icon: BookOpen },
+-  { to: "/search", label: "Search", icon: Search },
+-  { to: "/dashboard", label: "Analytics", icon: TrendingUp },
+   { to: "/builder", label: "Build", icon: Wand2, center: true },
+   { to: "/bookmarks", label: "Saved", icon: Bookmark },
+   { to: "/profile", label: "Profile", icon: User },
+@@ -71,6 +69,13 @@
+               <Flame size={12} /> {profile?.streak ?? 0}-day streak
+             </span>
+           )}
++          <button
++            onClick={() => navigate("/search")}
++            className="flex h-9 w-9 items-center justify-center rounded-full"
++            style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}` }}
++          >
++            <Search size={16} color={t.textMuted} />
++          </button>
+           <button
+             onClick={toggleDark}
+             className="flex h-9 w-9 items-center justify-center rounded-full"

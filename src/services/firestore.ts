@@ -10,6 +10,7 @@ import {
   query,
   orderBy,
   limit,
+  getDocs,
   serverTimestamp,
   Timestamp,
   runTransaction,
@@ -151,4 +152,14 @@ export async function removeBookmark(uid: string, bookmarkId: string) {
 export async function setPremium(uid: string, months = 1) {
   const expiry = Timestamp.now().toMillis() + months * 30 * 24 * 60 * 60 * 1000;
   await updateDoc(doc(db, "users", uid), { premium: true, premiumExpiry: expiry, premiumSince: serverTimestamp() });
+}
+export async function fetchAllUserAttempts(uid: string): Promise<AttemptRecord[]> {
+  try {
+    const q = query(collection(db, "users", uid, "attempts"), orderBy("createdAt", "asc"));
+    const snap = await getDocs(q);
+    return snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as Omit<AttemptRecord, "id">) }));
+  } catch (err) {
+    console.error("Failed to fetch all attempts:", err);
+    return [];
+  }
 }

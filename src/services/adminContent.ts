@@ -603,3 +603,30 @@ export function subscribeCurriculumCounts(cb: (counts: CurriculumCounts) => void
     }
   );
 }
+export async function searchGlobalQuestions(queryText: string): Promise<FirestoreQuestion[]> {
+  try {
+    const q = query(collection(db, "questions"), where("status", "==", "published"));
+    const snap = await getDocs(q);
+    const fsResults = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<FirestoreQuestion, "id">) }));
+    
+    const localQs = getLocalQuestions().filter(lq => lq.status === "published");
+    const defResults = DEFAULT_QUESTIONS.filter(dq => dq.status === "published");
+    
+    const map = new Map<string, FirestoreQuestion>();
+    defResults.forEach(dq => map.set(dq.q.trim().toLowerCase(), dq));
+    localQs.forEach(lq => map.set(lq.q.trim().toLowerCase(), lq));
+    fsResults.forEach(fq => map.set(fq.q.trim().toLowerCase(), fq));
+    
+    const combined = Array.from(map.values());
+    const lowerQuery = queryText.toLowerCase();
+    
+    return combined.filter(q => 
+      q.q.toLowerCase().includes(lowerQuery) ||
+      (q.explanation && q.explanation.toLowerCase().includes(lowerQuery)) ||
+      q.options.some(opt => opt.toLowerCase().includes(lowerQuery))
+    );
+  } catch (err) {
+    console.warn("Firestore searchGlobalQuestions failed:", err);
+    return [];
+  }
+}

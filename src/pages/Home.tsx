@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Sparkles, ArrowRight, CheckCircle2, Layers, Check, X, HelpCircle, ChevronRight } from "lucide-react";
+import { Sparkles, ArrowRight, Check, X, HelpCircle, ChevronRight } from "lucide-react";
 import Pill from "../components/Pill";
 import Card from "../components/Card";
 import Btn from "../components/Btn";
@@ -13,8 +13,8 @@ const SCATTER_SUBJECTS = SUBJECT_LIST.map((id, i) => ({ id, rotate: SCATTER_ROTA
 
 const FAQS = [
   { q: "What's free vs. paid?", a: "Guest mode unlocks one full practice set per subject. Signing up (free) gives full access to every subject, module, and set, plus progress tracking and spaced repetition." },
-  { q: "How does spaced repetition work?", a: "Turn it on before a set starts. Any question you miss is quietly reinserted 5\u201310 questions later in the same session, so it resurfaces before you forget it." },
-  { q: "How does AI Explain work?", a: "No AI is wired in yet \u2014 tapping it copies the question and your answer to your clipboard and opens your chatbot of choice, ready to paste." },
+  { q: "How does spaced repetition work?", a: "Turn it on before a set starts. Any question you miss is quietly reinserted 5-10 questions later in the same session, so it resurfaces before you forget it." },
+  { q: "How does AI Explain work?", a: "No AI is wired in yet — tapping it copies the question and your answer to your clipboard and opens your chatbot of choice, ready to paste." },
 ];
 
 export default function Home() {
@@ -38,7 +38,7 @@ export default function Home() {
           </h1>
           <p style={{ color: t.textMuted, fontSize: 16, maxWidth: 540, lineHeight: 1.6 }}>
             Pick a subject, choose traditional or OMR-style practice, and let spaced repetition bring back
-            exactly what you got wrong \u2014 until it sticks.
+            exactly what you got wrong — until it sticks.
           </p>
           <div className="flex flex-wrap gap-3">
             <Btn t={t} icon={ArrowRight} onClick={() => navigate("/subjects")}>
@@ -59,98 +59,63 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="grid gap-6 md:grid-cols-2">
         <Card t={t}>
-          <div className="mb-3 flex items-center gap-2">
-            <CheckCircle2 size={18} color={t.green} />
-            <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16 }}>What's live</h2>
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>Free Trial</span>
+            </div>
+            <Pill t={t} tone="teal">Free</Pill>
           </div>
-          <ul className="flex flex-col gap-2.5 text-sm" style={{ color: t.textMuted }}>
-            <li className="flex gap-2">
-              <Check size={14} color={t.green} className="mt-0.5 shrink-0" /> Subject \u2192 module \u2192 set structure
+          <ul className="flex flex-col gap-3 text-sm" style={{ color: t.textMuted }}>
+            <li className="flex items-center gap-3">
+              <Check size={16} color={t.green} /> 1 sample module per subject
             </li>
-            <li className="flex gap-2">
-              <Check size={14} color={t.green} className="mt-0.5 shrink-0" /> Traditional + OMR bubble-sheet modes
+            <li className="flex items-center gap-3">
+              <X size={16} color={t.red} /> Comprehensive progress analytics
             </li>
-            <li className="flex gap-2">
-              <Check size={14} color={t.green} className="mt-0.5 shrink-0" /> Spaced repetition, bookmarks, custom quizzes
+            <li className="flex items-center gap-3">
+              <X size={16} color={t.red} /> Spaced repetition system
             </li>
-            <li className="flex gap-2">
-              <Check size={14} color={t.green} className="mt-0.5 shrink-0" /> Streaks & weak-topic breakdown
-            </li>
-            <li className="flex gap-2">
-              <Check size={14} color={t.green} className="mt-0.5 shrink-0" /> Admin bulk-import with format validation
+            <li className="flex items-center gap-3">
+              <X size={16} color={t.red} /> Custom quiz builder
             </li>
           </ul>
         </Card>
-        <Card t={t}>
-          <div className="mb-3 flex items-center gap-2">
-            <Layers size={18} color={t.gold} />
-            <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16 }}>Coming next</h2>
-          </div>
-          <ul className="flex flex-col gap-2.5 text-sm" style={{ color: t.textMuted }}>
-            <li className="flex gap-2">
-              <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: t.gold }} /> Real accounts & synced progress
-            </li>
-            <li className="flex gap-2">
-              <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: t.gold }} /> Timed test mode with per-question analytics
-            </li>
-            <li className="flex gap-2">
-              <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: t.gold }} /> Offline / installable PWA
-            </li>
-            <li className="flex gap-2">
-              <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: t.gold }} /> CSV / PDF export
-            </li>
-          </ul>
-        </Card>
-      </section>
 
-      <section>
-        <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 21, marginBottom: 14 }}>Guest vs. full access</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card t={t}>
-            <div className="mb-2 flex items-center justify-between">
-              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600 }}>Guest</span>
-              <Pill t={t} tone="gold">No signup</Pill>
+        <Card t={t} style={{ borderColor: t.purple }}>
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>Subscription</span>
             </div>
-            <ul className="flex flex-col gap-2 text-sm" style={{ color: t.textMuted }}>
-              <li className="flex items-center gap-2">
-                <Check size={14} color={t.green} /> 1 free set per subject
-              </li>
-              <li className="flex items-center gap-2">
-                <X size={14} color={t.red} /> Progress tracking
-              </li>
-              <li className="flex items-center gap-2">
-                <X size={14} color={t.red} /> Spaced repetition & bookmarks
-              </li>
-              <li className="flex items-center gap-2">
-                <X size={14} color={t.red} /> Full question bank
-              </li>
-            </ul>
-          </Card>
-          <Card t={t} style={{ borderColor: t.purple }}>
-            <div className="mb-2 flex items-center justify-between">
-              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600 }}>Full access</span>
-              <Pill t={t} tone="purple" active>
-                Free account
-              </Pill>
-            </div>
-            <ul className="flex flex-col gap-2 text-sm" style={{ color: t.textMuted }}>
-              <li className="flex items-center gap-2">
-                <Check size={14} color={t.green} /> Every subject, module & set
-              </li>
-              <li className="flex items-center gap-2">
-                <Check size={14} color={t.green} /> Spaced repetition & bookmarks
-              </li>
-              <li className="flex items-center gap-2">
-                <Check size={14} color={t.green} /> Streaks & weak-topic heatmap
-              </li>
-              <li className="flex items-center gap-2">
-                <Check size={14} color={t.green} /> Custom quiz builder
-              </li>
-            </ul>
-          </Card>
-        </div>
+            <Pill t={t} tone="purple" active>
+              Premium Subscription
+            </Pill>
+          </div>
+          <ul className="flex flex-col gap-3 text-sm" style={{ color: t.textMuted }}>
+            <li className="flex items-center gap-3">
+              <Check size={16} color={t.green} /> Full access to all modules & blocks
+            </li>
+            <li className="flex items-center gap-3">
+              <Check size={16} color={t.green} /> Comprehensive progress analytics
+            </li>
+            <li className="flex items-center gap-3">
+              <Check size={16} color={t.green} /> Spaced repetition system
+            </li>
+            <li className="flex items-center gap-3">
+              <Check size={16} color={t.green} /> Custom quiz builder
+            </li>
+            <li className="flex items-center gap-3">
+              <Check size={16} color={t.green} /> Save & bookmark questions
+            </li>
+            <li className="flex items-center gap-3">
+              <Check size={16} color={t.green} /> Weak-topic heatmap & streaks
+            </li>
+          </ul>
+          <Btn t={t} full style={{ marginTop: 16 }} onClick={() => navigate("/paywall")}>
+            Subscribe Now
+          </Btn>
+        </Card>
       </section>
 
       <section className="pb-2">

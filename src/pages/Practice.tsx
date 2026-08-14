@@ -12,6 +12,7 @@ import {
   XCircle,
   ClipboardCopy,
   FlagOff,
+  Monitor,
 } from "lucide-react";
 import Card from "../components/Card";
 import Pill from "../components/Pill";
@@ -35,7 +36,9 @@ export default function Practice() {
   const [selected, setSelected] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState<number | null>(session?.config.timing === "timed" ? 300 : null);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(
+    session?.config.mode === "exam" ? session.queue.length * 60 : session?.config.timing === "timed" ? 300 : null
+  );
   const [finishing, setFinishing] = useState(false);
 
   useEffect(() => {
@@ -71,7 +74,7 @@ export default function Practice() {
   }
 
   const { setRef, config, queue, pos, record, bookmarked, requeueCount } = session;
-  const isOmr = config.mode === "omr";
+  const isOmr = config.mode === "omr" || config.mode === "exam";
   const qIndex = queue[pos];
   const question = setRef.questions[qIndex];
   const totalSteps = queue.length;
@@ -176,73 +179,138 @@ export default function Practice() {
 
   if (isOmr) {
     return (
-      <div
-        className="mx-auto flex max-w-xl flex-col gap-6 rounded-[26px] p-6 md:p-9"
-        style={{
-          backgroundColor: t.surface,
-          border: `1.5px solid ${t.border}`,
-          backgroundImage: `repeating-linear-gradient(0deg, ${t.border}33 0, ${t.border}33 1px, transparent 1px, transparent 28px)`,
-        }}
-      >
-        <div className="flex items-center justify-between">
-          <button onClick={() => { clearSession(); navigate("/subjects"); }} className="flex items-center gap-1 text-sm font-bold" style={{ color: t.textMuted }}>
-            <ChevronLeft size={15} /> Exit
-          </button>
-          <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: t.textFaint }}>
-            OMR MODE \u00b7 Q{pos + 1}/{totalSteps}
-          </span>
-          {mm ? (
-            <span style={{ fontFamily: FONT_MONO, fontSize: 13, color: secondsLeft! < 30 ? t.red : t.textMuted }}>
-              <Clock size={12} className="mr-1 inline" />
-              {mm}:{ss}
-            </span>
-          ) : (
-            ExitAndFinishBar
-          )}
-        </div>
-
-        <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: t.surfaceAlt }}>
-          <div className="h-full rounded-full transition-all" style={{ width: `${(pos / totalSteps) * 100}%`, backgroundColor: t.purple }} />
-        </div>
-
-        <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 19, lineHeight: 1.4 }}>{question.q}</h2>
-
-        <div className="flex flex-col gap-3">
-          {question.options.map((opt, i) => (
-            <button
-              key={i}
-              onClick={() => selectOption(i)}
-              className="flex items-center gap-4 rounded-2xl px-4 py-3.5 text-left text-sm"
-              style={{ border: `1.5px solid ${selected === i ? t.purple : t.border}`, backgroundColor: selected === i ? `${t.purple}18` : "transparent" }}
-            >
-              <span
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                style={{
-                  border: `2px solid ${selected === i ? t.purple : t.textFaint}`,
-                  backgroundColor: selected === i ? t.purple : "transparent",
-                  color: selected === i ? "#fff" : t.textFaint,
-                  fontFamily: FONT_MONO,
-                }}
-              >
-                {String.fromCharCode(65 + i)}
-              </span>
-              {opt}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center justify-between">
-          <button onClick={toggleBookmark} disabled={!uid} title={uid ? "Bookmark" : "Log in to bookmark"}>
-            {bookmarked[qIndex] ? <BookmarkCheck size={18} color={t.gold} /> : <Bookmark size={18} color={t.textFaint} />}
-          </button>
-          <Btn t={t} onClick={submitAnswer} disabled={selected === null} icon={ArrowRight}>
-            {pos + 1 >= totalSteps ? "Finish" : "Next"}
+      <>
+        {/* Mobile/Tablet warning */}
+        <div className="md:hidden flex flex-col items-center justify-center py-20 text-center">
+          <Monitor size={48} color={t.purple} className="mb-4" />
+          <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 20 }}>Desktop Required</h2>
+          <p style={{ color: t.textMuted, marginTop: 8 }}>
+            This mode features a split-screen layout that requires a wider screen. Please switch to a desktop or tablet device in landscape.
+          </p>
+          <Btn t={t} onClick={() => { clearSession(); navigate("/subjects"); }} style={{ marginTop: 24 }}>
+            Exit Practice
           </Btn>
         </div>
-        <p className="text-center text-xs" style={{ color: t.textFaint }}>
-          No feedback shown until you finish \u2014 just like a real bubble sheet.
-        </p>
-      </div>
+
+        {/* Desktop Split View */}
+        <div className="hidden md:flex gap-8 h-[calc(100vh-140px)]">
+          {/* Left Side: MCQs */}
+          <div className="flex-1 overflow-y-auto pr-4 pb-10">
+            <div className="flex items-center justify-between mb-6 sticky top-0 z-10 py-3" style={{ backgroundColor: `${t.bg}F2`, backdropFilter: "blur(8px)" }}>
+               <button onClick={() => { clearSession(); navigate("/subjects"); }} className="flex items-center gap-1 text-sm font-bold" style={{ color: t.textMuted }}>
+                 <ChevronLeft size={15} /> Exit
+               </button>
+               <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: t.textFaint }}>
+                 {config.mode === "exam" ? "MOCK EXAM" : "OMR MODE"} &middot; {totalSteps} QUESTIONS
+               </span>
+            </div>
+
+            {queue.map((qIdx, index) => {
+              const q = setRef.questions[qIdx];
+              const selectedOption = record[qIdx]?.selected ?? null;
+              const isBookmarked = bookmarked[qIdx];
+              return (
+                <div key={qIdx} className="mb-12">
+                  <div className="flex gap-3 mb-5">
+                    <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, color: t.purple }}>{index + 1}.</span>
+                    <h3 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 18, lineHeight: 1.5, flex: 1 }}>{q.q}</h3>
+                    <button 
+                      onClick={() => {
+                        if (!uid) return;
+                        updateSession({ bookmarked: { ...bookmarked, [qIdx]: !isBookmarked } });
+                        if (!isBookmarked) {
+                          addBookmark(uid, setRef.subjectId, setRef.moduleName, setRef.block, q).catch(() => {});
+                        }
+                      }} 
+                      disabled={!uid} 
+                      title={uid ? "Bookmark" : "Log in to bookmark"}
+                      className="shrink-0 mt-1"
+                    >
+                      {isBookmarked ? <BookmarkCheck size={18} color={t.gold} /> : <Bookmark size={18} color={t.textFaint} />}
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-1.5 pl-7">
+                    {q.options.map((opt, i) => (
+                      <div 
+                        key={i} 
+                        className="flex gap-3 items-start text-sm cursor-pointer p-2 -ml-2 rounded-xl transition-colors hover:bg-opacity-50"
+                        style={{ backgroundColor: selectedOption === i ? `${t.purple}15` : "transparent" }}
+                        onClick={() => {
+                          if (finishing) return;
+                          updateSession({ record: { ...record, [qIdx]: { selected: i, correct: i === q.correct } } });
+                        }}
+                      >
+                        <span style={{ fontFamily: FONT_MONO, color: selectedOption === i ? t.purple : t.textFaint, fontWeight: selectedOption === i ? "bold" : "normal" }}>
+                          {String.fromCharCode(65 + i)}.
+                        </span>
+                        <span style={{ color: selectedOption === i ? t.text : t.textMuted }}>{opt}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Right Side: Bubble Sheet */}
+          <div className="w-72 shrink-0 rounded-2xl flex flex-col overflow-hidden h-full shadow-lg" style={{ backgroundColor: t.surface, border: `1.5px solid ${t.border}` }}>
+            <div className="p-4 border-b flex justify-between items-center bg-opacity-50" style={{ borderColor: t.border, backgroundColor: t.surfaceAlt }}>
+              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15 }}>Bubble Sheet</span>
+              {mm ? (
+                <span style={{ fontFamily: FONT_MONO, fontSize: 13, color: secondsLeft! < 30 ? t.red : t.textMuted }}>
+                  <Clock size={12} className="mr-1 inline" />
+                  {mm}:{ss}
+                </span>
+              ) : (
+                <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: t.textFaint }}>Untimed</span>
+              )}
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-5" style={{ backgroundImage: `repeating-linear-gradient(0deg, ${t.border}22 0, ${t.border}22 1px, transparent 1px, transparent 40px)` }}>
+               {queue.map((qIdx, index) => {
+                 const q = setRef.questions[qIdx];
+                 const selectedOption = record[qIdx]?.selected ?? null;
+                 return (
+                   <div key={qIdx} className="flex items-center gap-4 h-[40px]">
+                     <span className="w-6 text-right text-sm font-bold" style={{ color: t.textFaint, fontFamily: FONT_MONO }}>{index + 1}.</span>
+                     <div className="flex gap-2">
+                       {q.options.map((_, i) => (
+                         <button
+                           key={i}
+                           onClick={() => {
+                             if (finishing) return;
+                             updateSession({ record: { ...record, [qIdx]: { selected: i, correct: i === q.correct } } });
+                           }}
+                           className="w-8 h-8 rounded-full flex items-center justify-center text-xs transition-all hover:scale-105"
+                           style={{ 
+                             border: `1.5px solid ${selectedOption === i ? t.purple : t.border}`,
+                             backgroundColor: selectedOption === i ? t.purple : t.surfaceAlt,
+                             color: selectedOption === i ? "#fff" : t.textFaint,
+                             fontFamily: FONT_MONO,
+                             fontWeight: 600,
+                             boxShadow: selectedOption === i ? `0 0 10px ${t.purple}44` : "none"
+                           }}
+                         >
+                           {String.fromCharCode(65 + i)}
+                         </button>
+                       ))}
+                     </div>
+                   </div>
+                 );
+               })}
+            </div>
+            
+            <div className="p-4 border-t flex flex-col gap-2" style={{ borderColor: t.border, backgroundColor: t.surfaceAlt }}>
+              <div className="flex justify-between text-xs mb-1" style={{ color: t.textFaint, fontFamily: FONT_MONO }}>
+                <span>Answered: {Object.values(record).filter(r => r && r.selected !== null).length}/{totalSteps}</span>
+              </div>
+              <Btn t={t} full onClick={() => finishNow()} disabled={finishing}>
+                Submit Exam
+              </Btn>
+            </div>
+          </div>
+        </div>
+      </>
     );
   }
 
