@@ -45,6 +45,13 @@ export interface AdminQuestion {
   correct: number;
   status: AdminQuestionStatus;
 }
+
+export interface SubjectAccuracy {
+  subject: string;
+  accuracy: number;
+}
+
+export const SUBJECT_ACCURACY: SubjectAccuracy[] = [
   { subject: "Physiology", accuracy: 64 },
   { subject: "Pharm", accuracy: 52 },
   { subject: "Pathology", accuracy: 71 },
