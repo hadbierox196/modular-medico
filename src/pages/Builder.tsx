@@ -1,50 +1,59 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Wand2 } from "lucide-react";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { Wand2, Lock } from "lucide-react";
 import Card from "../components/Card";
 import Pill from "../components/Pill";
 import Btn from "../components/Btn";
 import Toggle from "../components/Toggle";
 import { THEME, FONT_DISPLAY, FONT_MONO } from "../theme";
-import { useAppStore } from "../store/useAppStore";
-import { SUBJECTS, SUBJECT_META } from "../data/mockData";
-import type { MCQ, PracticeConfig } from "../types";
+import { useAppStore, useIsLoggedIn, useIsPremium } from "../store/useAppStore";
+import { SUBJECT_LIST, SUBJECT_META } from "../data/subjects";
+import { db } from "../firebase";
+import type { FirestoreQuestion, PracticeConfig } from "../types";
 
 export default function Builder() {
   const navigate = useNavigate();
   const isDark = useAppStore((s) => s.isDark);
   const startSession = useAppStore((s) => s.startSession);
+  const isLoggedIn = useIsLoggedIn();
+  const isPremium = useIsPremium();
   const t = isDark ? THEME.dark : THEME.light;
 
   const [picked, setPicked] = useState<string[]>(["anatomy"]);
   const [count, setCount] = useState(5);
   const [timeLimit, setTimeLimit] = useState(false);
+  const [pool, setPool] = useState<FirestoreQuestion[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const togglePick = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
-  const available: MCQ[] = useMemo(() => {
-    const qs: MCQ[] = [];
-    SUBJECTS.forEach((s) => {
-      if (!picked.includes(s.id)) return;
-      s.modules.forEach((m) => m.sets.forEach((set) => { if (set.questions) qs.push(...set.questions); }));
-    });
-    return qs;
+  useEffect(() => {
+    if (picked.length === 0) {
+      setPool([]);
+      return;
+    }
+    setLoading(true);
+    const q = query(collection(db, "questions"), where("subjectId", "in", picked.slice(0, 10)), where("status", "==", "published"));
+    getDocs(q)
+      .then((snap) => setPool(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<FirestoreQuestion, "id">) }))))
+      .finally(() => setLoading(false));
   }, [picked]);
 
+  const available = useMemo(() => pool, [pool]);
+
   const generate = () => {
-    if (available.length === 0) return;
-    const questions = available.slice(0, count);
-    const config: PracticeConfig = { mode: "traditional", timing: timeLimit ? "timed" : "untimed", spacedRep: true };
+    if (!isPremium || available.length === 0) return;
+    const shuffled = [...available].sort(() => Math.random() - 0.5).slice(0, count);
+    const config: PracticeConfig = { mode: "traditional", timing: timeLimit ? "timed" : "untimed", spacedRep: true, difficultyFilter: "all" };
     startSession(
       {
-        subjectId: "anatomy",
+        subjectId: picked[0] || "anatomy",
         moduleId: "custom",
         moduleName: "Custom quiz",
-        setId: "custom-quiz",
+        block: 0,
         setTitle: "Custom quiz",
-        difficulty: "medium",
-        highYield: false,
-        questions,
+        questions: shuffled.map((q) => ({ q: q.q, options: q.options, correct: q.correct, explanation: q.explanation })),
       },
       config
     );
@@ -55,23 +64,36 @@ export default function Builder() {
     <div className="mx-auto flex max-w-lg flex-col gap-6">
       <div>
         <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26 }}>Build a custom quiz</h1>
-        <p style={{ color: t.textMuted, fontSize: 14, marginTop: 2 }}>Mix subjects, set a length, generate.</p>
+        <p style={{ color: t.textMuted, fontSize: 14, marginTop: 2 }}>Mix subjects, set a length, generate. Premium feature.</p>
       </div>
 
-      <Card t={t}>
+      {!isPremium && (
+        <Card t={t} style={{ borderColor: t.gold }}>
+          <div className="mb-2 flex items-center gap-2">
+            <Lock size={15} color={t.gold} />
+            <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14 }}>Premium feature</span>
+          </div>
+          <p className="mb-4 text-sm" style={{ color: t.textMuted }}>The custom quiz builder is part of Premium.</p>
+          <Btn t={t} full onClick={() => navigate(isLoggedIn ? "/paywall" : "/signup")}>
+            {isLoggedIn ? "Upgrade to Premium" : "Create free account"}
+          </Btn>
+        </Card>
+      )}
+
+      <Card t={t} style={!isPremium ? { opacity: 0.5, pointerEvents: "none" } : {}}>
         <span className="mb-3 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
           Subjects
         </span>
         <div className="flex flex-wrap gap-2">
-          {SUBJECTS.map((s, i) => (
-            <Pill key={s.id} t={t} tone={t.chip[i % t.chip.length]} active={picked.includes(s.id)} onClick={() => togglePick(s.id)}>
-              {SUBJECT_META[s.id].label}
+          {SUBJECT_LIST.map((id, i) => (
+            <Pill key={id} t={t} tone={t.chip[i % t.chip.length]} active={picked.includes(id)} onClick={() => togglePick(id)}>
+              {SUBJECT_META[id].label}
             </Pill>
           ))}
         </div>
       </Card>
 
-      <Card t={t} className="flex flex-col gap-5">
+      <Card t={t} className="flex flex-col gap-5" style={!isPremium ? { opacity: 0.5, pointerEvents: "none" } : {}}>
         <div>
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
@@ -94,11 +116,11 @@ export default function Builder() {
           <Toggle t={t} checked={timeLimit} onChange={setTimeLimit} />
         </div>
         <p className="text-xs" style={{ color: t.textFaint }}>
-          {available.length} authored question{available.length !== 1 ? "s" : ""} available from your selection right now.
+          {loading ? "Loading\u2026" : `${available.length} published question${available.length !== 1 ? "s" : ""} available from your selection.`}
         </p>
       </Card>
 
-      <Btn t={t} full icon={Wand2} disabled={available.length === 0} onClick={generate}>
+      <Btn t={t} full icon={Wand2} disabled={!isPremium || available.length === 0 || loading} onClick={generate}>
         Generate quiz
       </Btn>
     </div>

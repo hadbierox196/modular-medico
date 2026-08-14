@@ -28,7 +28,9 @@ export default function AdminGate() {
       <ShieldCheck size={30} color={t.purple} className="mx-auto" />
       <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22 }}>Staff access</h1>
       <p style={{ color: t.textMuted, fontSize: 13 }}>
-        This area is separate from student accounts. Prototype password: <span style={{ fontFamily: FONT_MONO }}>admin</span>
+        This screen is just a UI gate (default password: <span style={{ fontFamily: FONT_MONO }}>admin</span>). The real permission
+        check happens in Firestore: writes are only accepted from a signed-in account with the <span style={{ fontFamily: FONT_MONO }}>admin</span> custom
+        claim (see <span style={{ fontFamily: FONT_MONO }}>scripts/setAdminClaim.mjs</span>). Log in with your account first.
       </p>
       <Card t={t} className="flex flex-col gap-3 text-left">
         <input

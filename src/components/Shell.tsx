@@ -17,6 +17,7 @@ import {
 import Logomark from "./Logomark";
 import { THEME, FONT_DISPLAY, FONT_BODY } from "../theme";
 import { useAppStore } from "../store/useAppStore";
+import { logOut as firebaseLogOut } from "../services/auth";
 
 const NAV_ITEMS = [
   { to: "/", label: "Home", icon: HomeIcon, end: true },
@@ -32,8 +33,9 @@ export default function Shell() {
   const location = useLocation();
   const isDark = useAppStore((s) => s.isDark);
   const toggleDark = useAppStore((s) => s.toggleDark);
-  const isLoggedIn = useAppStore((s) => s.isLoggedIn);
-  const logOut = useAppStore((s) => s.logOut);
+  const uid = useAppStore((s) => s.uid);
+  const profile = useAppStore((s) => s.profile);
+  const isLoggedIn = !!uid;
 
   const t = isDark ? THEME.dark : THEME.light;
 
@@ -63,7 +65,7 @@ export default function Shell() {
             </button>
           ) : (
             <span className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold sm:inline-flex" style={{ backgroundColor: `${t.green}22`, color: t.green }}>
-              <Flame size={12} /> 4-day streak
+              <Flame size={12} /> {profile?.streak ?? 0}-day streak
             </span>
           )}
           <button
@@ -104,7 +106,7 @@ export default function Shell() {
           </nav>
           <div className="flex flex-col gap-2">
             {isLoggedIn ? (
-              <button onClick={() => { logOut(); navigate("/"); }} className="flex items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-bold" style={{ color: t.textFaint }}>
+              <button onClick={() => { firebaseLogOut(); navigate("/"); }} className="flex items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-bold" style={{ color: t.textFaint }}>
                 <LogOut size={15} /> Log out
               </button>
             ) : (
@@ -142,7 +144,7 @@ export default function Shell() {
                 ))}
                 <div className="my-2 h-px" style={{ backgroundColor: t.border }} />
                 {isLoggedIn ? (
-                  <button onClick={() => { logOut(); setMenuOpen(false); navigate("/"); }} className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-bold" style={{ color: t.textFaint }}>
+                  <button onClick={() => { firebaseLogOut(); setMenuOpen(false); navigate("/"); }} className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-bold" style={{ color: t.textFaint }}>
                     <LogOut size={16} /> Log out
                   </button>
                 ) : (

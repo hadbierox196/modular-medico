@@ -5,19 +5,11 @@ import Pill from "../components/Pill";
 import Card from "../components/Card";
 import Btn from "../components/Btn";
 import { THEME, FONT_DISPLAY } from "../theme";
-import { useAppStore } from "../store/useAppStore";
-import { SUBJECT_META } from "../data/mockData";
+import { useAppStore, useIsLoggedIn } from "../store/useAppStore";
+import { SUBJECT_LIST, SUBJECT_META } from "../data/subjects";
 
-const SCATTER_SUBJECTS = [
-  { id: "anatomy", rotate: -6 },
-  { id: "physiology", rotate: 4 },
-  { id: "pharmacology", rotate: -3 },
-  { id: "pathology", rotate: 7 },
-  { id: "biochemistry", rotate: -8 },
-  { id: "microbiology", rotate: 3 },
-  { id: "forensic", rotate: -4 },
-  { id: "community", rotate: 6 },
-];
+const SCATTER_ROTATIONS = [-6, 4, -3, 7, -8];
+const SCATTER_SUBJECTS = SUBJECT_LIST.map((id, i) => ({ id, rotate: SCATTER_ROTATIONS[i % SCATTER_ROTATIONS.length] }));
 
 const FAQS = [
   { q: "What's free vs. paid?", a: "Guest mode unlocks one full practice set per subject. Signing up (free) gives full access to every subject, module, and set, plus progress tracking and spaced repetition." },
@@ -28,7 +20,7 @@ const FAQS = [
 export default function Home() {
   const navigate = useNavigate();
   const isDark = useAppStore((s) => s.isDark);
-  const isLoggedIn = useAppStore((s) => s.isLoggedIn);
+  const isLoggedIn = useIsLoggedIn();
   const t = isDark ? THEME.dark : THEME.light;
   const [openFaq, setOpenFaq] = useState(0);
 

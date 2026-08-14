@@ -1,11 +1,11 @@
-import type { AdminQuestion, ImportResult } from "../types";
+import type { ImportResult } from "../types";
 
 /**
  * Parses blocks of the form:
  *   [Question text ; Option A | Option B | *Option C | Option D]
  * where the option prefixed with "*" is the correct answer.
  */
-export function parseBracketFormat(raw: string, existing: AdminQuestion[]): ImportResult[] {
+export function parseBracketFormat(raw: string, existing: { q: string }[]): ImportResult[] {
   const blocks = raw.match(/\[[^\]]*\]/g) || [];
   const existingNorm = new Set(existing.map((q) => q.q.trim().toLowerCase()));
 

@@ -1,16 +1,17 @@
 import { useNavigate } from "react-router-dom";
-import { Lock, CheckCircle2, XCircle, RotateCcw } from "lucide-react";
+import { Crown, CheckCircle2, XCircle, RotateCcw } from "lucide-react";
 import Card from "../components/Card";
 import Pill from "../components/Pill";
 import Btn from "../components/Btn";
 import { THEME, FONT_DISPLAY, FONT_MONO } from "../theme";
-import { useAppStore } from "../store/useAppStore";
-import { SUBJECT_META } from "../data/mockData";
+import { useAppStore, useIsLoggedIn, useIsPremium } from "../store/useAppStore";
+import { SUBJECT_META } from "../data/subjects";
 
 export default function Results() {
   const navigate = useNavigate();
   const isDark = useAppStore((s) => s.isDark);
-  const isLoggedIn = useAppStore((s) => s.isLoggedIn);
+  const isLoggedIn = useIsLoggedIn();
+  const isPremium = useIsPremium();
   const lastResult = useAppStore((s) => s.lastResult);
   const t = isDark ? THEME.dark : THEME.light;
 
@@ -19,7 +20,7 @@ export default function Results() {
       <div className="py-16 text-center">
         <p style={{ color: t.textMuted }}>No recent results to show.</p>
         <button onClick={() => navigate("/subjects")} className="mt-3 text-sm font-bold" style={{ color: t.teal }}>
-          Practice a set
+          Practice a block
         </button>
       </div>
     );
@@ -29,12 +30,13 @@ export default function Results() {
   const correct = answers.filter((a) => a.correct).length;
   const pct = Math.round((correct / answers.length) * 100);
   const scoreColor = pct >= 80 ? t.green : pct >= 50 ? t.gold : t.red;
+  const isCustom = setRef.block === 0;
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6">
       <div className="text-center">
         <Pill t={t} tone="muted">
-          {SUBJECT_META[setRef.subjectId]?.label} \u00b7 {setRef.moduleName}
+          {SUBJECT_META[setRef.subjectId as keyof typeof SUBJECT_META]?.label} \u00b7 {setRef.moduleName}
         </Pill>
         <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, marginTop: 10 }}>{setRef.setTitle} \u2014 complete</h1>
       </div>
@@ -73,21 +75,33 @@ export default function Results() {
           t={t}
           full
           icon={RotateCcw}
-          onClick={() =>
-            navigate(setRef.setId === "custom-quiz" ? "/builder" : `/subjects/${setRef.subjectId}/${setRef.moduleId}/${setRef.setId}`)
-          }
+          onClick={() => navigate(isCustom ? "/builder" : `/subjects/${setRef.subjectId}/${setRef.moduleId}/${setRef.block}`)}
         >
           Practice again
         </Btn>
       </div>
+      {isLoggedIn && !isPremium && (
+        <Card t={t} style={{ borderColor: t.gold }}>
+          <div className="mb-2 flex items-center gap-2">
+            <Crown size={15} color={t.gold} />
+            <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14 }}>Keep the momentum going</span>
+          </div>
+          <p className="mb-4 text-sm" style={{ color: t.textMuted }}>
+            Premium unlocks every block in every subject, plus spaced repetition across your whole history.
+          </p>
+          <Btn t={t} full icon={Crown} onClick={() => navigate("/paywall")}>
+            See Premium plans
+          </Btn>
+        </Card>
+      )}
       {!isLoggedIn && (
         <Card t={t} style={{ borderColor: t.gold }}>
           <div className="mb-2 flex items-center gap-2">
-            <Lock size={15} color={t.gold} />
-            <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14 }}>That was your free set</span>
+            <Crown size={15} color={t.gold} />
+            <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14 }}>Save this progress</span>
           </div>
           <p className="mb-4 text-sm" style={{ color: t.textMuted }}>
-            Sign up to unlock every subject, spaced repetition, and progress tracking.
+            Create a free account to track streaks, save bookmarks, and sync progress across devices.
           </p>
           <Btn t={t} full onClick={() => navigate("/signup")}>
             Create free account
