@@ -557,11 +557,10 @@ export default function AdminPanel() {
 
             {/* 5. Subheading — 4th level of the hierarchy, scoped to this exact Block + Module + Subject */}
             <div className="mt-4 border-t pt-4" style={{ borderColor: t.border }}>
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="mb-1.5">
                 <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
                   <ListTree size={13} /> Subheading
                 </label>
-                <span className="text-[11px]" style={{ color: t.textFaint }}>Optional &bull; scoped to Block {effectiveBlock} &bull; {effectiveModuleName}</span>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -660,16 +659,6 @@ export default function AdminPanel() {
                 <BookOpen size={14} /> Traditional Form Mode
               </button>
             </div>
-
-            {inputMode === "bracket" && (
-              <button
-                onClick={() => setBracketText(SAMPLE_BRACKET_TEMPLATE)}
-                className="text-xs font-bold underline transition-colors"
-                style={{ color: t.teal }}
-              >
-                Insert Sample Template
-              </button>
-            )}
           </div>
 
           {/* Status Message */}
