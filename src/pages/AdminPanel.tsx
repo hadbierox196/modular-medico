@@ -22,6 +22,7 @@ import {
 import Card from "../components/Card";
 import Pill from "../components/Pill";
 import Btn from "../components/Btn";
+import Spinner from "../components/Spinner";
 import { THEME, FONT_DISPLAY, FONT_MONO } from "../theme";
 import { useAppStore } from "../store/useAppStore";
 import {
@@ -939,8 +940,8 @@ export default function AdminPanel() {
 
           {/* Questions List */}
           {loadingQuestions ? (
-            <div className="py-16 text-center text-sm font-semibold" style={{ color: t.textMuted }}>
-              Loading question bank...
+            <div className="py-16 text-center">
+              <Spinner t={t} size={24} label="Loading question bank\u2026" />
             </div>
           ) : filteredQuestions.length === 0 ? (
             <div className="rounded-2xl p-12 text-center flex flex-col items-center gap-3" style={{ backgroundColor: t.surface, border: `1.5px solid ${t.border}` }}>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { Wand2, Lock } from "lucide-react";
+import { Wand2, Lock, Loader2 } from "lucide-react";
 import Card from "../components/Card";
 import Pill from "../components/Pill";
 import Btn from "../components/Btn";
@@ -132,11 +132,17 @@ export default function Builder() {
           <Toggle t={t} checked={timeLimit} onChange={setTimeLimit} />
         </div>
         <p className="text-xs" style={{ color: t.textFaint }}>
-          {loading ? "Loading\u2026" : `${available.length} published question${available.length !== 1 ? "s" : ""} available from your selection.`}
+          {loading ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Loader2 size={12} className="animate-spin" /> Loading published questions&hellip;
+            </span>
+          ) : (
+            `${available.length} published question${available.length !== 1 ? "s" : ""} available from your selection.`
+          )}
         </p>
       </Card>
 
-      <Btn t={t} full icon={Wand2} disabled={!isPremium || available.length === 0 || loading} onClick={generate}>
+      <Btn t={t} full icon={loading ? Loader2 : Wand2} spin={loading} disabled={!isPremium || available.length === 0 || loading} onClick={generate}>
         Generate quiz
       </Btn>
     </div>

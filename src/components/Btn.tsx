@@ -7,6 +7,8 @@ interface Props {
   t: ThemeTokens;
   onClick?: () => void;
   icon?: LucideIcon;
+  /** Spins the icon (e.g. pass icon={Loader2} spin while an async action is in flight). */
+  spin?: boolean;
   full?: boolean;
   variant?: "primary" | "secondary" | "ghost" | "danger";
   style?: CSSProperties;
@@ -14,7 +16,7 @@ interface Props {
   disabled?: boolean;
 }
 
-export default function Btn({ children, t, onClick, icon: Icon, full, variant = "primary", style, type = "button", disabled }: Props) {
+export default function Btn({ children, t, onClick, icon: Icon, spin, full, variant = "primary", style, type = "button", disabled }: Props) {
   const styles: Record<string, CSSProperties> = {
     primary: { backgroundColor: t.gold, color: "#241A08", border: `1.5px solid ${t.gold}` },
     secondary: { backgroundColor: t.purpleStrong, color: "#fff", border: `1.5px solid ${t.purpleStrong}` },
@@ -30,7 +32,8 @@ export default function Btn({ children, t, onClick, icon: Icon, full, variant = 
       style={{ fontFamily: FONT_BODY, ...styles[variant], ...style }}
     >
       {children}
-      {Icon && <Icon size={16} />}
+      {Icon && <Icon size={16} className={spin ? "animate-spin" : undefined} />}
     </button>
   );
 }
+

@@ -11,6 +11,7 @@ import {
   Lock,
   Clock,
   Sliders,
+  Loader2,
 } from "lucide-react";
 import Card from "../components/Card";
 import Pill from "../components/Pill";
@@ -207,7 +208,13 @@ export default function PracticeSetup() {
           {moduleDisplayName}
         </h1>
         <p style={{ color: t.textMuted, fontSize: 13.5, marginTop: 2 }}>
-          {count === null ? "Checking questions\u2026" : `${count} question${count !== 1 ? "s" : ""} available`}
+          {count === null ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Loader2 size={13} className="animate-spin" /> Checking questions&hellip;
+            </span>
+          ) : (
+            `${count} question${count !== 1 ? "s" : ""} available`
+          )}
         </p>
       </div>
 
@@ -350,7 +357,7 @@ export default function PracticeSetup() {
         )}
       </Card>
 
-      <Btn t={t} full icon={ArrowRight} disabled={loading || count === 0} onClick={start}>
+      <Btn t={t} full icon={loading ? Loader2 : ArrowRight} spin={loading} disabled={loading || count === 0} onClick={start}>
         {loading ? "Preparing session\u2026" : count === 0 ? "No published questions yet" : `Start Practice Session`}
       </Btn>
     </div>

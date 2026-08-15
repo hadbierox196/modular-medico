@@ -15,6 +15,7 @@ import Card from "../components/Card";
 import Pill from "../components/Pill";
 import Btn from "../components/Btn";
 import SubjectIcon from "../components/SubjectIcon";
+import Spinner from "../components/Spinner";
 import { THEME, FONT_DISPLAY, FONT_MONO } from "../theme";
 import { useAppStore, useIsLoggedIn, useIsPremium } from "../store/useAppStore";
 import {
@@ -47,6 +48,7 @@ export default function Subjects() {
   const [yearFilter, setYearFilter] = useState<string>("all");
   const [blockDefs, setBlockDefs] = useState<BlockDefinition[]>(DEFAULT_BLOCK_DEFINITIONS);
   const [allQuestions, setAllQuestions] = useState<FirestoreQuestion[]>([]);
+  const [questionsLoaded, setQuestionsLoaded] = useState(false);
   const [counts, setCounts] = useState<CurriculumCounts>({
     blockCounts: {},
     moduleCounts: {},
@@ -57,7 +59,10 @@ export default function Subjects() {
   useEffect(() => {
     const unsubBlocks = subscribeBlockDefinitions(setBlockDefs);
     const unsubCounts = subscribeCurriculumCounts(setCounts);
-    const unsubQs = subscribeAllQuestions((qs) => setAllQuestions(qs));
+    const unsubQs = subscribeAllQuestions((qs) => {
+      setAllQuestions(qs);
+      setQuestionsLoaded(true);
+    });
     return () => {
       unsubBlocks();
       unsubCounts();
@@ -338,7 +343,16 @@ export default function Subjects() {
                 </div>
               </div>
 
-              {displayModules.length === 0 && (
+              {!questionsLoaded && (
+                <div
+                  className="flex flex-col items-center justify-center gap-3 rounded-2xl p-10 text-center"
+                  style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}` }}
+                >
+                  <Spinner t={t} size={22} label="Loading modules\u2026" />
+                </div>
+              )}
+
+              {questionsLoaded && displayModules.length === 0 && (
                 <div
                   className="flex flex-col items-center justify-center gap-2 rounded-2xl p-10 text-center"
                   style={{ backgroundColor: t.surfaceAlt, border: `1.5px dashed ${t.border}` }}

@@ -4,6 +4,7 @@ import { ChevronLeft, Lock, Crown, Layers, ArrowRight, FolderTree } from "lucide
 import Card from "../components/Card";
 import Btn from "../components/Btn";
 import SubjectIcon from "../components/SubjectIcon";
+import Spinner from "../components/Spinner";
 import { THEME, FONT_DISPLAY } from "../theme";
 import { useAppStore, useIsLoggedIn, useIsPremium } from "../store/useAppStore";
 import {
@@ -30,6 +31,7 @@ export default function SubjectDetail() {
   const t = isDark ? THEME.dark : THEME.light;
   const [blockDefs, setBlockDefs] = useState<BlockDefinition[]>(DEFAULT_BLOCK_DEFINITIONS);
   const [allQuestions, setAllQuestions] = useState<FirestoreQuestion[]>([]);
+  const [questionsLoaded, setQuestionsLoaded] = useState(false);
   const [counts, setCounts] = useState<CurriculumCounts>({
     blockCounts: {},
     moduleCounts: {},
@@ -39,7 +41,14 @@ export default function SubjectDetail() {
 
   useEffect(() => subscribeBlockDefinitions(setBlockDefs), []);
   useEffect(() => subscribeCurriculumCounts(setCounts), []);
-  useEffect(() => subscribeAllQuestions(setAllQuestions), []);
+  useEffect(
+    () =>
+      subscribeAllQuestions((qs) => {
+        setAllQuestions(qs);
+        setQuestionsLoaded(true);
+      }),
+    []
+  );
 
   if (!(SUBJECT_LIST as readonly string[]).includes(subjectId)) {
     return (
@@ -160,7 +169,16 @@ export default function SubjectDetail() {
           </div>
         </div>
 
-        {moduleAppearances.length === 0 && (
+        {!questionsLoaded && (
+          <div
+            className="flex flex-col items-center justify-center gap-3 rounded-2xl p-10 text-center"
+            style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}` }}
+          >
+            <Spinner t={t} size={22} label="Loading modules\u2026" />
+          </div>
+        )}
+
+        {questionsLoaded && moduleAppearances.length === 0 && (
           <div
             className="flex flex-col items-center justify-center gap-2 rounded-2xl p-10 text-center"
             style={{ backgroundColor: t.surfaceAlt, border: `1.5px dashed ${t.border}` }}
