@@ -6,20 +6,20 @@ import {
   updateProfile,
   type User,
 } from "firebase/auth";
-import { auth } from "../firebase";
+import { getFirebaseAuth } from "../firebase";
 import { ensureUserProfile } from "./firestore";
 import { useAppStore } from "../store/useAppStore";
 import type { UserProfile } from "../types";
 
 export function subscribeAuth(callback: (user: User | null) => void) {
-  return onAuthStateChanged(auth, callback);
+  return onAuthStateChanged(getFirebaseAuth(), callback);
 }
 
 export async function signUp(name: string, email: string, password: string) {
   const cleanEmail = email.trim();
   const cleanName = name.trim();
 
-  const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+  const cred = await createUserWithEmailAndPassword(getFirebaseAuth(), cleanEmail, password);
   if (cleanName) {
     try {
       await updateProfile(cred.user, { displayName: cleanName });
@@ -55,7 +55,7 @@ export async function signUp(name: string, email: string, password: string) {
 export async function logIn(email: string, password: string) {
   const cleanEmail = email.trim();
 
-  const cred = await signInWithEmailAndPassword(auth, cleanEmail, password);
+  const cred = await signInWithEmailAndPassword(getFirebaseAuth(), cleanEmail, password);
   const displayName = cred.user.displayName || "";
   try {
     await ensureUserProfile(cred.user.uid, cred.user.email || cleanEmail, displayName);
@@ -69,7 +69,7 @@ export async function logIn(email: string, password: string) {
 
 export async function logOut() {
   try {
-    await signOut(auth);
+    await signOut(getFirebaseAuth());
   } catch (e) {
     console.warn("Firebase signOut error:", e);
   }
