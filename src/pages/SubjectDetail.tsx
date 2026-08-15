@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, Lock, Crown, Layers, ArrowRight } from "lucide-react";
+import { ChevronLeft, Lock, Crown, Layers, ArrowRight, FolderTree } from "lucide-react";
 import Card from "../components/Card";
 import Btn from "../components/Btn";
 import SubjectIcon from "../components/SubjectIcon";
@@ -13,7 +13,13 @@ import {
   type SubjectId,
   type BlockDefinition,
 } from "../data/subjects";
-import { subscribeBlockDefinitions, subscribeCurriculumCounts, type CurriculumCounts } from "../services/adminContent";
+import {
+  subscribeBlockDefinitions,
+  subscribeCurriculumCounts,
+  subscribeAllQuestions,
+  type CurriculumCounts,
+} from "../services/adminContent";
+import type { FirestoreQuestion } from "../types";
 
 export default function SubjectDetail() {
   const navigate = useNavigate();
@@ -23,6 +29,7 @@ export default function SubjectDetail() {
   const isPremium = useIsPremium();
   const t = isDark ? THEME.dark : THEME.light;
   const [blockDefs, setBlockDefs] = useState<BlockDefinition[]>(DEFAULT_BLOCK_DEFINITIONS);
+  const [allQuestions, setAllQuestions] = useState<FirestoreQuestion[]>([]);
   const [counts, setCounts] = useState<CurriculumCounts>({
     blockCounts: {},
     moduleCounts: {},
@@ -32,6 +39,7 @@ export default function SubjectDetail() {
 
   useEffect(() => subscribeBlockDefinitions(setBlockDefs), []);
   useEffect(() => subscribeCurriculumCounts(setCounts), []);
+  useEffect(() => subscribeAllQuestions(setAllQuestions), []);
 
   if (!(SUBJECT_LIST as readonly string[]).includes(subjectId)) {
     return (
@@ -46,7 +54,9 @@ export default function SubjectDetail() {
 
   const meta = SUBJECT_META[subjectId as SubjectId];
 
-  // Find all modules across all blocks that teach this subject
+  // Only show modules that actually have published MCQs for this subject — nothing is
+  // pre-populated from the curriculum scaffold. A module appears here only once real
+  // content has been added for it in the admin panel.
   const moduleAppearances: Array<{
     block: BlockDefinition;
     module: { id: string; name: string; description?: string };
@@ -54,20 +64,35 @@ export default function SubjectDetail() {
     locked: boolean;
   }> = [];
 
-  blockDefs.forEach((b) => {
-    b.modules?.forEach((m) => {
-      if (m.subjects.includes(subjectId as SubjectId)) {
-        const count = counts.subjectInModuleCounts[`${b.block}-${m.id}-${subjectId}`] || 0;
-        const locked = b.block !== 1 && !isPremium;
-        moduleAppearances.push({
-          block: b,
-          module: m,
-          questionCount: count,
-          locked,
-        });
-      }
+  const seenModuleKeys = new Set<string>();
+  allQuestions
+    .filter((q) => q.subjectId === subjectId && q.status === "published")
+    .forEach((q) => {
+      const modId = q.moduleId || q.moduleName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const key = `${q.block}-${modId}`;
+      if (seenModuleKeys.has(key)) return;
+      seenModuleKeys.add(key);
+
+      const blockDef = blockDefs.find((b) => b.block === q.block);
+      const count = counts.subjectInModuleCounts[`${q.block}-${modId}-${subjectId}`] || 0;
+      const locked = q.block !== 1 && !isPremium;
+
+      moduleAppearances.push({
+        block:
+          blockDef || {
+            block: q.block,
+            title: `Block ${q.block}`,
+            year: "",
+            description: "",
+            modules: [],
+          },
+        module: { id: modId, name: q.moduleName || "General Module" },
+        questionCount: count,
+        locked,
+      });
     });
-  });
+
+  moduleAppearances.sort((a, b) => a.block.block - b.block.block);
 
   const totalSubjectQuestions = counts.subjectTotalCounts[subjectId] || 0;
 
@@ -134,6 +159,20 @@ export default function SubjectDetail() {
             </p>
           </div>
         </div>
+
+        {moduleAppearances.length === 0 && (
+          <div
+            className="flex flex-col items-center justify-center gap-2 rounded-2xl p-10 text-center"
+            style={{ backgroundColor: t.surfaceAlt, border: `1.5px dashed ${t.border}` }}
+          >
+            <FolderTree size={22} color={t.textFaint} />
+            <h4 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15 }}>Coming Soon</h4>
+            <p className="max-w-sm text-xs" style={{ color: t.textMuted }}>
+              No MCQ banks have been added for {meta.label} yet. Modules will appear here automatically as soon as
+              questions are published for this subject.
+            </p>
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           {moduleAppearances.map(({ block, module, questionCount, locked }) => (

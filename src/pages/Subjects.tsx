@@ -91,18 +91,14 @@ export default function Subjects() {
 
   const currentBlockDef = blockDefs.find((b) => b.block === selectedBlockNum) || DEFAULT_BLOCK_DEFINITIONS[0];
 
-  // Dynamic modules for the selected block (Requirement 3)
+  // Only show modules that actually have published MCQs added by the admin for this block.
+  // Nothing is pre-populated from the curriculum scaffold anymore — a module only appears
+  // once real content exists for it.
   const displayModules = useMemo(() => {
-    const definedModules = currentBlockDef.modules || [];
     const moduleMap = new Map<string, { id: string; name: string; description?: string; subjects: SubjectId[] }>();
 
-    definedModules.forEach((m) => {
-      moduleMap.set(m.id, { ...m });
-    });
-
-    // Add any dynamically added questions for this block
     allQuestions
-      .filter((q) => q.block === selectedBlockNum)
+      .filter((q) => q.block === selectedBlockNum && q.status === "published")
       .forEach((q) => {
         const modId = q.moduleId || q.moduleName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
         const existing = moduleMap.get(modId);
@@ -114,14 +110,13 @@ export default function Subjects() {
           moduleMap.set(modId, {
             id: modId,
             name: q.moduleName || "General Module",
-            description: `Dynamic module for Block ${selectedBlockNum}`,
             subjects: [q.subjectId as SubjectId],
           });
         }
       });
 
     return Array.from(moduleMap.values());
-  }, [currentBlockDef, allQuestions, selectedBlockNum]);
+  }, [allQuestions, selectedBlockNum]);
 
   const totalQuestionsInSelectedBlock = counts.blockCounts[selectedBlockNum] || 0;
 
@@ -342,6 +337,20 @@ export default function Subjects() {
                   </h3>
                 </div>
               </div>
+
+              {displayModules.length === 0 && (
+                <div
+                  className="flex flex-col items-center justify-center gap-2 rounded-2xl p-10 text-center"
+                  style={{ backgroundColor: t.surfaceAlt, border: `1.5px dashed ${t.border}` }}
+                >
+                  <FolderTree size={22} color={t.textFaint} />
+                  <h4 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15 }}>Coming Soon</h4>
+                  <p className="max-w-sm text-xs" style={{ color: t.textMuted }}>
+                    No MCQ banks have been added to Block {currentBlockDef.block} yet. Modules will appear here
+                    automatically as soon as questions are published for this block.
+                  </p>
+                </div>
+              )}
 
               <div className="flex flex-col gap-4">
                 {displayModules.map((mod, modIdx) => {
