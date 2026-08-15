@@ -21,6 +21,8 @@ export interface FirestoreQuestion {
   moduleId: string;
   moduleName: string;
   block: number; // 1..15
+  subheadingId?: string | null;
+  subheadingName?: string | null;
   difficulty: Difficulty;
   q: string;
   options: string[];
@@ -32,6 +34,22 @@ export interface FirestoreQuestion {
 
 export interface ModuleDoc {
   id: string;
+  subjectId: string;
+  name: string;
+  order: number;
+}
+
+/**
+ * A Subheading is the 4th level of the content hierarchy:
+ * Block -> Module -> Subject -> Subheading.
+ * It is scoped to one specific (block, moduleId, subjectId) combination,
+ * e.g. within "Block 3 / Cardiovascular-I / Gross Anatomy" a faculty member
+ * might create subheadings like "Heart Chambers" or "Coronary Circulation".
+ */
+export interface SubheadingDoc {
+  id: string;
+  block: number;
+  moduleId: string;
   subjectId: string;
   name: string;
   order: number;

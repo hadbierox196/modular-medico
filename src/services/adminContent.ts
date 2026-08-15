@@ -13,10 +13,11 @@ import {
 import { db } from "../firebase";
 import { DEFAULT_MODULES, DEFAULT_QUESTIONS } from "../data/defaultCurriculum";
 import { DEFAULT_BLOCK_DEFINITIONS, type BlockDefinition } from "../data/subjects";
-import type { Difficulty, FirestoreQuestion, ModuleDoc, QuestionStatus } from "../types";
+import type { Difficulty, FirestoreQuestion, ModuleDoc, QuestionStatus, SubheadingDoc } from "../types";
 
 const LOCAL_MODULES_KEY = "modular_medico_custom_modules";
 const LOCAL_BLOCKS_KEY = "modular_medico_custom_blocks";
+const LOCAL_SUBHEADINGS_KEY = "modular_medico_subheadings";
 
 function getLocalBlockDefinitions(): BlockDefinition[] | null {
   try {
@@ -173,6 +174,140 @@ export async function deleteModule(subjectId: string, moduleId: string) {
   }
 }
 
+/* -------------------------- Subheadings ---------------------------- */
+/*
+ * Subheadings are the 4th tier of the content hierarchy:
+ *   Block -> Module -> Subject -> Subheading
+ * Each subheading is scoped to one (block, moduleId, subjectId) triple, so a
+ * given Subject can have a completely different set of subheadings inside
+ * each Module/Block it appears in. Follows the same Firestore-with-
+ * localStorage-fallback pattern used for blocks/modules above.
+ */
+
+function subheadingsLocalKey(block: number, moduleId: string, subjectId: string) {
+  return `${LOCAL_SUBHEADINGS_KEY}__${block}__${moduleId}__${subjectId}`;
+}
+
+function getLocalSubheadings(block: number, moduleId: string, subjectId: string): SubheadingDoc[] {
+  try {
+    const raw = localStorage.getItem(subheadingsLocalKey(block, moduleId, subjectId));
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+function setLocalSubheadings(block: number, moduleId: string, subjectId: string, list: SubheadingDoc[]) {
+  try {
+    localStorage.setItem(subheadingsLocalKey(block, moduleId, subjectId), JSON.stringify(list));
+  } catch {
+    // ignore
+  }
+}
+
+/** Live subheadings scoped to one Block + Module + Subject combination. */
+export function subscribeSubheadings(
+  block: number,
+  moduleId: string,
+  subjectId: string,
+  cb: (subheadings: SubheadingDoc[]) => void
+) {
+  if (!moduleId || !subjectId) {
+    cb([]);
+    return () => {};
+  }
+  const fallback = getLocalSubheadings(block, moduleId, subjectId);
+
+  const q = query(
+    collection(db, "subheadings"),
+    where("block", "==", block),
+    where("moduleId", "==", moduleId),
+    where("subjectId", "==", subjectId)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      if (!snap.empty) {
+        const list = snap.docs
+          .map((d) => ({ id: d.id, ...(d.data() as Omit<SubheadingDoc, "id">) }))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        setLocalSubheadings(block, moduleId, subjectId, list);
+        cb(list);
+      } else {
+        cb(fallback);
+      }
+    },
+    (err) => {
+      console.warn("Firestore subheadings query fallback to local:", err.message);
+      cb(fallback);
+    }
+  );
+}
+
+/** Create a new Subheading under a specific Block -> Module -> Subject. */
+export async function createSubheading(block: number, moduleId: string, subjectId: string, name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return "";
+  const current = getLocalSubheadings(block, moduleId, subjectId);
+
+  // Avoid exact-name duplicates within the same scope.
+  const existing = current.find((s) => s.name.trim().toLowerCase() === trimmed.toLowerCase());
+  if (existing) return existing.id;
+
+  const docData = { block, moduleId, subjectId, name: trimmed, order: current.length };
+  let id = "";
+  try {
+    const ref = await addDoc(collection(db, "subheadings"), docData);
+    id = ref.id;
+  } catch (err) {
+    console.warn("Firestore createSubheading failed, saving locally:", err);
+    id = `local-sh-${Date.now()}-${Math.round(Math.random() * 1000)}`;
+  }
+  setLocalSubheadings(block, moduleId, subjectId, [...current, { id, ...docData }]);
+  return id;
+}
+
+/** Rename an existing Subheading. */
+export async function renameSubheading(
+  block: number,
+  moduleId: string,
+  subjectId: string,
+  subheadingId: string,
+  name: string
+) {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  const current = getLocalSubheadings(block, moduleId, subjectId);
+  setLocalSubheadings(
+    block,
+    moduleId,
+    subjectId,
+    current.map((s) => (s.id === subheadingId ? { ...s, name: trimmed } : s))
+  );
+  try {
+    await updateDoc(doc(db, "subheadings", subheadingId), { name: trimmed });
+  } catch (err) {
+    console.warn("Firestore renameSubheading failed, local storage updated:", err);
+  }
+}
+
+/** Delete a Subheading. Questions already tagged with it keep their tag as free text. */
+export async function deleteSubheading(block: number, moduleId: string, subjectId: string, subheadingId: string) {
+  const current = getLocalSubheadings(block, moduleId, subjectId);
+  setLocalSubheadings(
+    block,
+    moduleId,
+    subjectId,
+    current.filter((s) => s.id !== subheadingId)
+  );
+  try {
+    await deleteDoc(doc(db, "subheadings", subheadingId));
+  } catch (err) {
+    console.warn("Firestore deleteSubheading failed:", err);
+  }
+}
+
 /* --------------------------- Questions ---------------------------- */
 
 export interface QuestionInput {
@@ -180,6 +315,8 @@ export interface QuestionInput {
   moduleId: string;
   moduleName: string;
   block: number;
+  subheadingId?: string | null;
+  subheadingName?: string | null;
   difficulty: Difficulty;
   q: string;
   options: string[];

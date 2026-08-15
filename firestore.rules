@@ -63,6 +63,18 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Block definitions (Block -> Module -> Subject curriculum tree).
+    match /block_definitions/{blockId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Subheadings: 4th tier of the hierarchy (Block -> Module -> Subject -> Subheading).
+    match /subheadings/{subheadingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /questions/{questionId} {
       allow get, list: if resource.data.status == 'published' || isAdmin();
       allow create, update, delete: if isAdmin();

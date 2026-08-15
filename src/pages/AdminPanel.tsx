@@ -18,6 +18,8 @@ import {
   ArrowRight,
   Filter,
   RefreshCw,
+  ListTree,
+  X,
 } from "lucide-react";
 import Card from "../components/Card";
 import Pill from "../components/Pill";
@@ -38,9 +40,12 @@ import {
   updateQuestionStatus,
   deleteQuestion,
   subscribeAllQuestions,
+  subscribeSubheadings,
+  createSubheading,
+  deleteSubheading,
 } from "../services/adminContent";
 import { parseBracketFormat } from "../utils/parseBracketFormat";
-import type { Difficulty, FirestoreQuestion, QuestionStatus } from "../types";
+import type { Difficulty, FirestoreQuestion, QuestionStatus, SubheadingDoc } from "../types";
 
 const ADMIN_TABS = [
   { id: "add_mcq", label: "Add MCQs", icon: PlusCircle },
@@ -96,6 +101,15 @@ export default function AdminPanel() {
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [publishImmediately, setPublishImmediately] = useState(true);
 
+  /* ------------------------------------------------------------------------- */
+  /* HIERARCHY: Block -> Module -> Subject -> Subheading                       */
+  /* ------------------------------------------------------------------------- */
+  const [subheadings, setSubheadings] = useState<SubheadingDoc[]>([]);
+  const [selectedSubheadingId, setSelectedSubheadingId] = useState<string>("");
+  const [showNewSubheadingInput, setShowNewSubheadingInput] = useState(false);
+  const [newSubheadingName, setNewSubheadingName] = useState("");
+  const [creatingSubheading, setCreatingSubheading] = useState(false);
+
   // Bracket Mode State
   const [bracketText, setBracketText] = useState("");
   const [saveStatus, setSaveStatus] = useState<"success" | "error" | null>(null);
@@ -115,6 +129,7 @@ export default function AdminPanel() {
   const [filterSubject, setFilterSubject] = useState<string>("all");
   const [filterDifficulty, setFilterDifficulty] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterSubheading, setFilterSubheading] = useState<string>("all");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
@@ -123,6 +138,39 @@ export default function AdminPanel() {
     ? customModuleName.trim() || "General Module"
     : selectedModulePreset;
   const effectiveModuleId = effectiveModuleName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+  // Subheadings are scoped to one exact (Block, Module, Subject) combination,
+  // so re-subscribe any time that combination changes, and reset the
+  // selection when it no longer applies to the freshly-loaded list.
+  useEffect(() => {
+    setSelectedSubheadingId("");
+    setShowNewSubheadingInput(false);
+    setNewSubheadingName("");
+    const unsub = subscribeSubheadings(effectiveBlock, effectiveModuleId, subjectId, setSubheadings);
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveBlock, effectiveModuleId, subjectId]);
+
+  const selectedSubheading = subheadings.find((s) => s.id === selectedSubheadingId) || null;
+
+  const handleCreateSubheading = async () => {
+    const name = newSubheadingName.trim();
+    if (!name || creatingSubheading) return;
+    setCreatingSubheading(true);
+    try {
+      const id = await createSubheading(effectiveBlock, effectiveModuleId, subjectId, name);
+      setSelectedSubheadingId(id);
+      setNewSubheadingName("");
+      setShowNewSubheadingInput(false);
+    } finally {
+      setCreatingSubheading(false);
+    }
+  };
+
+  const handleDeleteSubheading = async (sh: SubheadingDoc) => {
+    await deleteSubheading(effectiveBlock, effectiveModuleId, subjectId, sh.id);
+    if (selectedSubheadingId === sh.id) setSelectedSubheadingId("");
+  };
 
   // Real-time Bracket Parse
   const parsedBracketResults = useMemo(() => {
@@ -147,6 +195,8 @@ export default function AdminPanel() {
         moduleId: effectiveModuleId,
         moduleName: effectiveModuleName,
         block: effectiveBlock,
+        subheadingId: selectedSubheading?.id ?? null,
+        subheadingName: selectedSubheading?.name ?? null,
         difficulty,
         q: v.q!,
         options: v.options!,
@@ -182,6 +232,8 @@ export default function AdminPanel() {
         moduleId: effectiveModuleId,
         moduleName: effectiveModuleName,
         block: effectiveBlock,
+        subheadingId: selectedSubheading?.id ?? null,
+        subheadingName: selectedSubheading?.name ?? null,
         difficulty,
         q: traditionalQ.trim(),
         options: options.map((o) => o.trim()),
@@ -244,17 +296,31 @@ export default function AdminPanel() {
       if (filterSubject !== "all" && q.subjectId !== filterSubject) return false;
       if (filterDifficulty !== "all" && q.difficulty !== filterDifficulty) return false;
       if (filterStatus !== "all" && q.status !== filterStatus) return false;
+      if (filterSubheading !== "all" && (q.subheadingName || "General / No subheading") !== filterSubheading) return false;
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         const inQ = q.q.toLowerCase().includes(query);
         const inOpts = q.options.some((o) => o.toLowerCase().includes(query));
         const inExp = q.explanation?.toLowerCase().includes(query);
         const inMod = q.moduleName?.toLowerCase().includes(query);
-        if (!inQ && !inOpts && !inExp && !inMod) return false;
+        const inSub = q.subheadingName?.toLowerCase().includes(query);
+        if (!inQ && !inOpts && !inExp && !inMod && !inSub) return false;
       }
       return true;
     });
-  }, [allQuestions, filterBlock, filterSubject, filterDifficulty, filterStatus, searchQuery]);
+  }, [allQuestions, filterBlock, filterSubject, filterDifficulty, filterStatus, filterSubheading, searchQuery]);
+
+  // Distinct subheading names present in the bank, given the other active filters (Block/Subject scoped),
+  // used to populate the Subheading filter dropdown in the Manage tab.
+  const availableSubheadingNames = useMemo(() => {
+    const names = new Set<string>();
+    allQuestions.forEach((q) => {
+      if (filterBlock !== "all" && q.block !== Number(filterBlock)) return;
+      if (filterSubject !== "all" && q.subjectId !== filterSubject) return;
+      names.add(q.subheadingName || "General / No subheading");
+    });
+    return Array.from(names).sort();
+  }, [allQuestions, filterBlock, filterSubject]);
 
   return (
     <div className="flex flex-col gap-6 max-w-5xl mx-auto pb-16">
@@ -492,12 +558,88 @@ export default function AdminPanel() {
               </div>
             </div>
 
+            {/* 5. Subheading Selector — 4th level of the hierarchy, scoped to this exact Block + Module + Subject */}
+            <div className="mt-4 border-t pt-4" style={{ borderColor: t.border }}>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                  <ListTree size={13} /> Subheading (within {SUBJECT_META[subjectId].label})
+                </label>
+                <span className="text-[11px]" style={{ color: t.textFaint }}>Optional &bull; scoped to Block {effectiveBlock} &bull; {effectiveModuleName}</span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={selectedSubheadingId}
+                  onChange={(e) => setSelectedSubheadingId(e.target.value)}
+                  className="flex-1 min-w-[200px] rounded-xl px-3 py-2.5 text-sm font-semibold outline-none"
+                  style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                >
+                  <option value="">No subheading (general)</option>
+                  {subheadings.map((s) => (
+                    <option key={s.id} value={s.id} style={{ backgroundColor: t.surface, color: t.text }}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => setShowNewSubheadingInput(!showNewSubheadingInput)}
+                  className="flex items-center gap-1 rounded-xl px-3 py-2.5 text-xs font-bold transition-all"
+                  style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.teal }}
+                >
+                  <Plus size={13} /> New Subheading
+                </button>
+              </div>
+
+              {showNewSubheadingInput && (
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newSubheadingName}
+                    onChange={(e) => setNewSubheadingName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateSubheading()}
+                    placeholder="e.g. Coronary Circulation"
+                    autoFocus
+                    className="flex-1 rounded-xl px-3 py-2 text-sm font-semibold outline-none"
+                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.teal}`, color: t.text }}
+                  />
+                  <Btn t={t} variant="secondary" disabled={!newSubheadingName.trim() || creatingSubheading} onClick={handleCreateSubheading}>
+                    {creatingSubheading ? "Adding\u2026" : "Add"}
+                  </Btn>
+                </div>
+              )}
+
+              {/* Existing subheadings for this scope, with quick delete */}
+              {subheadings.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {subheadings.map((s) => (
+                    <Pill
+                      key={s.id}
+                      t={t}
+                      tone="teal"
+                      active={selectedSubheadingId === s.id}
+                      onClick={() => setSelectedSubheadingId(selectedSubheadingId === s.id ? "" : s.id)}
+                    >
+                      {s.name}
+                      <X
+                        size={11}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteSubheading(s);
+                        }}
+                      />
+                    </Pill>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Target Summary Pill */}
             <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl p-3 text-xs" style={{ backgroundColor: t.surfaceAlt }}>
               <span className="font-bold" style={{ color: t.textMuted }}>Adding to:</span>
               <Pill t={t} tone="teal">Block {effectiveBlock}</Pill>
               <Pill t={t} tone="purple">{effectiveModuleName}</Pill>
               <Pill t={t} tone="gold">{SUBJECT_META[subjectId].label}</Pill>
+              {selectedSubheading && <Pill t={t} tone="muted">{selectedSubheading.name}</Pill>}
               <Pill t={t} tone={DIFF_TONE[difficulty] as any}>{difficulty}</Pill>
             </div>
           </Card>
@@ -912,6 +1054,24 @@ export default function AdminPanel() {
                     <option value="draft">Draft</option>
                   </select>
                 </div>
+
+                {/* Subheading Filter */}
+                <div>
+                  <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                    Subheading
+                  </label>
+                  <select
+                    value={filterSubheading}
+                    onChange={(e) => setFilterSubheading(e.target.value)}
+                    className="w-full rounded-xl px-2.5 py-2 text-xs font-semibold outline-none"
+                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                  >
+                    <option value="all">All Subheadings</option>
+                    {availableSubheadingNames.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </Card>
@@ -921,13 +1081,14 @@ export default function AdminPanel() {
             <span className="text-xs font-bold" style={{ color: t.textMuted }}>
               Showing {filteredQuestions.length} of {allQuestions.length} Total MCQs
             </span>
-            {(filterBlock !== "all" || filterSubject !== "all" || filterDifficulty !== "all" || filterStatus !== "all" || searchQuery) && (
+            {(filterBlock !== "all" || filterSubject !== "all" || filterDifficulty !== "all" || filterStatus !== "all" || filterSubheading !== "all" || searchQuery) && (
               <button
                 onClick={() => {
                   setFilterBlock("all");
                   setFilterSubject("all");
                   setFilterDifficulty("all");
                   setFilterStatus("all");
+                  setFilterSubheading("all");
                   setSearchQuery("");
                 }}
                 className="text-xs font-bold underline"
@@ -969,6 +1130,7 @@ export default function AdminPanel() {
                         <Pill t={t} tone="teal">Block {qItem.block}</Pill>
                         <Pill t={t} tone="purple">{qItem.moduleName || "General"}</Pill>
                         <Pill t={t} tone="gold">{subjectMeta?.label || qItem.subjectId}</Pill>
+                        {qItem.subheadingName && <Pill t={t} tone="muted">{qItem.subheadingName}</Pill>}
                         <Pill t={t} tone={DIFF_TONE[qItem.difficulty] as any}>{qItem.difficulty}</Pill>
                         <button
                           onClick={() => handleToggleStatus(qItem)}

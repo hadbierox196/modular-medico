@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Shell from "./components/Shell";
 import AdminLayout from "./components/AdminLayout";
+import ScrollToTop from "./components/ScrollToTop";
 import Home from "./pages/Home";
 import Auth from "./pages/Auth";
 import Subjects from "./pages/Subjects";
@@ -63,6 +64,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         {/* Student-facing site, wrapped in the shared shell (top bar + nav) */}
         <Route element={<Shell />}>
