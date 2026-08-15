@@ -16,6 +16,33 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+  (function () {
+    var shown = false;
+    function showError(msg) {
+      if (shown) return;
+      shown = true;
+      var root = document.getElementById("root");
+      var box = document.createElement("div");
+      box.style.cssText = "font-family:monospace;white-space:pre-wrap;padding:16px;color:#fff;background:#7a1f1f;font-size:13px;line-height:1.5;";
+      box.textContent = "App failed to start:\n\n" + msg;
+      if (root) root.appendChild(box);
+      else document.body.appendChild(box);
+    }
+    window.addEventListener("error", function (e) {
+      showError((e.error && e.error.stack) || e.message || String(e));
+    });
+    window.addEventListener("unhandledrejection", function (e) {
+      var r = e.reason;
+      showError((r && r.stack) || (r && r.message) || String(r));
+    });
+    setTimeout(function () {
+      if (!shown && document.getElementById("root") && !document.getElementById("root").hasChildNodes()) {
+        showError("Nothing rendered after 4s and no JS error was caught.\nThis usually means the JS bundle failed to load (404) or a stale service worker is serving an old page.");
+      }
+    }, 4000);
+  })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
