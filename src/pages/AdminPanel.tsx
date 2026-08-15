@@ -39,6 +39,7 @@ import {
   bulkAddQuestions,
   updateQuestionStatus,
   deleteQuestion,
+  bulkDeleteQuestions,
   subscribeAllQuestions,
   subscribeSubheadings,
   createSubheading,
@@ -130,6 +131,8 @@ export default function AdminPanel() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterSubheading, setFilterSubheading] = useState<string>("all");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const effectiveBlock = isCustomBlock ? parseInt(customBlockInput, 10) || 1 : selectedBlock;
@@ -287,6 +290,30 @@ export default function AdminPanel() {
     }
   };
 
+  // Bulk delete handler — removes every MCQ currently matched by the active filters
+  // (used to wipe out an entire subheading's questions in one go instead of one-by-one).
+  const handleBulkDeleteFiltered = async () => {
+    const targets = filteredQuestions;
+    if (targets.length === 0) {
+      setBulkDeleteConfirm(false);
+      return;
+    }
+    setBulkDeleting(true);
+    try {
+      await bulkDeleteQuestions(targets.map((q) => ({ id: q.id, q: q.q })));
+      setActionNotice(`Removed ${targets.length} MCQ${targets.length !== 1 ? "s" : ""}${
+        filterSubheading !== "all" ? ` from "${filterSubheading}"` : ""
+      }.`);
+      setTimeout(() => setActionNotice(null), 3500);
+    } catch {
+      setActionNotice("Failed to bulk delete questions.");
+      setTimeout(() => setActionNotice(null), 3000);
+    } finally {
+      setBulkDeleting(false);
+      setBulkDeleteConfirm(false);
+    }
+  };
+
   // Toggle status handler
   const handleToggleStatus = async (qItem: FirestoreQuestion) => {
     const nextStatus: QuestionStatus = qItem.status === "published" ? "draft" : "published";
@@ -320,6 +347,12 @@ export default function AdminPanel() {
       return true;
     });
   }, [allQuestions, filterBlock, filterSubject, filterDifficulty, filterStatus, filterSubheading, searchQuery]);
+
+  // Any change to the active filters invalidates a pending bulk-delete confirmation,
+  // so the count shown in the confirm prompt always matches what's on screen.
+  useEffect(() => {
+    setBulkDeleteConfirm(false);
+  }, [filterBlock, filterSubject, filterDifficulty, filterStatus, filterSubheading, searchQuery]);
 
   // Distinct subheading names present in the bank, given the other active filters (Block/Subject scoped),
   // used to populate the Subheading filter dropdown in the Manage tab.
@@ -1070,26 +1103,64 @@ export default function AdminPanel() {
           </Card>
 
           {/* Results Summary Bar */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-xs font-bold" style={{ color: t.textMuted }}>
               Showing {filteredQuestions.length} of {allQuestions.length} Total MCQs
             </span>
-            {(filterBlock !== "all" || filterSubject !== "all" || filterDifficulty !== "all" || filterStatus !== "all" || filterSubheading !== "all" || searchQuery) && (
-              <button
-                onClick={() => {
-                  setFilterBlock("all");
-                  setFilterSubject("all");
-                  setFilterDifficulty("all");
-                  setFilterStatus("all");
-                  setFilterSubheading("all");
-                  setSearchQuery("");
-                }}
-                className="text-xs font-bold underline"
-                style={{ color: t.teal }}
-              >
-                Reset All Filters
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {(filterBlock !== "all" || filterSubject !== "all" || filterDifficulty !== "all" || filterStatus !== "all" || filterSubheading !== "all" || searchQuery) && (
+                <button
+                  onClick={() => {
+                    setFilterBlock("all");
+                    setFilterSubject("all");
+                    setFilterDifficulty("all");
+                    setFilterStatus("all");
+                    setFilterSubheading("all");
+                    setSearchQuery("");
+                    setBulkDeleteConfirm(false);
+                  }}
+                  className="text-xs font-bold underline"
+                  style={{ color: t.teal }}
+                >
+                  Reset All Filters
+                </button>
+              )}
+
+              {/* Bulk delete — only surfaced once a Subheading is selected, so it's scoped to
+                  "delete this subheading's MCQs" rather than an easy way to wipe everything. */}
+              {filterSubheading !== "all" && filteredQuestions.length > 0 && (
+                !bulkDeleteConfirm ? (
+                  <button
+                    onClick={() => setBulkDeleteConfirm(true)}
+                    className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all text-red-400 hover:bg-red-500/10"
+                    title={`Delete all ${filteredQuestions.length} MCQs in "${filterSubheading}"`}
+                  >
+                    <Trash2 size={13} /> Delete All {filteredQuestions.length} in "{filterSubheading}"
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-red-400">
+                      Delete {filteredQuestions.length} MCQ{filteredQuestions.length !== 1 ? "s" : ""}? This can't be undone.
+                    </span>
+                    <button
+                      onClick={handleBulkDeleteFiltered}
+                      disabled={bulkDeleting}
+                      className="rounded-lg px-2.5 py-1 text-xs font-extrabold bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
+                    >
+                      {bulkDeleting ? "Deleting\u2026" : "Yes, Delete All"}
+                    </button>
+                    <button
+                      onClick={() => setBulkDeleteConfirm(false)}
+                      disabled={bulkDeleting}
+                      className="rounded-lg px-2 py-1 text-xs font-bold opacity-75 hover:opacity-100"
+                      style={{ color: t.textMuted }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )
+              )}
+            </div>
           </div>
 
           {/* Questions List */}

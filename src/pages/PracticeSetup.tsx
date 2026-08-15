@@ -30,6 +30,9 @@ import {
 } from "../services/adminContent";
 import type { Difficulty, PracticeConfig, SubheadingDoc } from "../types";
 
+// Mirrors the label used in the admin question bank for MCQs with no subheading tag.
+const GENERAL_SUBHEADING_LABEL = "General / No subheading";
+
 const TIMER_PRESETS = [
   { label: "3 min", seconds: 180 },
   { label: "5 min", seconds: 300 },
@@ -68,6 +71,13 @@ export default function PracticeSetup() {
   const [subheadings, setSubheadings] = useState<SubheadingDoc[]>([]);
   const [selectedSubheadingId, setSelectedSubheadingId] = useState<string>("");
 
+  // Module-level subheading picker — used when practicing a whole Module ("Practice Module"),
+  // which can span several subjects. Subheadings are scoped per-subject in Firestore, so here
+  // we group by the human-readable name across every published question in the module instead.
+  const [moduleSubheadingNames, setModuleSubheadingNames] = useState<string[]>([]);
+  const [selectedModuleSubheadingName, setSelectedModuleSubheadingName] = useState<string>("");
+  const [moduleSubheadingsLoaded, setModuleSubheadingsLoaded] = useState(false);
+
   // Force strict settings in Exam mode
   useEffect(() => {
     if (mode === "exam") {
@@ -99,6 +109,31 @@ export default function PracticeSetup() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSubjectInModule, block, moduleId, subjectId]);
 
+  // Discover the distinct subheadings used across every published question in this Module,
+  // so the whole-module "Practice Module" flow can offer the same narrowing the per-subject
+  // flow already has, instead of always bundling every subject's MCQs together.
+  useEffect(() => {
+    setSelectedModuleSubheadingName("");
+    setModuleSubheadingNames([]);
+    if (!isModuleExam || !Number.isInteger(block)) {
+      setModuleSubheadingsLoaded(true);
+      return;
+    }
+    setModuleSubheadingsLoaded(false);
+    let cancelled = false;
+    fetchPublishedModuleExam(block, moduleId).then((qs) => {
+      if (cancelled) return;
+      const names = new Set<string>();
+      qs.forEach((q) => names.add(q.subheadingName || GENERAL_SUBHEADING_LABEL));
+      setModuleSubheadingNames(Array.from(names).sort());
+      setModuleSubheadingsLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isModuleExam, block, moduleId]);
+
   const moduleDisplayName = isFullBlock
     ? `${blockDef?.title || `Block ${block}`} (All Modules)`
     : isModuleExam
@@ -117,7 +152,7 @@ export default function PracticeSetup() {
         if (mode === "exam") setTimerSeconds(qs.length * 60);
       });
     } else if (isModuleExam) {
-      fetchPublishedModuleExam(block, moduleId).then((qs) => {
+      fetchPublishedModuleExam(block, moduleId, undefined, selectedModuleSubheadingName || null).then((qs) => {
         setCount(qs.length);
         if (mode === "exam") setTimerSeconds(qs.length * 60);
       });
@@ -127,7 +162,18 @@ export default function PracticeSetup() {
         if (mode === "exam") setTimerSeconds(qs.length * 60);
       });
     }
-  }, [locked, subjectId, moduleId, block, isFullBlock, isModuleExam, isSubjectInModule, mode, selectedSubheadingId]);
+  }, [
+    locked,
+    subjectId,
+    moduleId,
+    block,
+    isFullBlock,
+    isModuleExam,
+    isSubjectInModule,
+    mode,
+    selectedSubheadingId,
+    selectedModuleSubheadingName,
+  ]);
 
   if (!Number.isInteger(block) || (!isFullBlock && !isModuleExam && !isSubjectInModule)) {
     return (
@@ -165,7 +211,7 @@ export default function PracticeSetup() {
     if (isFullBlock) {
       questions = await fetchPublishedBlockExam(block, diff);
     } else if (isModuleExam) {
-      questions = await fetchPublishedModuleExam(block, moduleId, diff);
+      questions = await fetchPublishedModuleExam(block, moduleId, diff, selectedModuleSubheadingName || null);
     } else {
       questions = await fetchPublishedBlock(subjectId, moduleId, block, diff, selectedSubheadingId || null);
     }
@@ -185,7 +231,9 @@ export default function PracticeSetup() {
     const title = isFullBlock
       ? `Block ${block}: Full Exam`
       : isModuleExam
-      ? `Block ${block} \u00b7 ${targetModule?.name || moduleId}`
+      ? `Block ${block} \u00b7 ${targetModule?.name || moduleId}${
+          selectedModuleSubheadingName ? ` \u00b7 ${selectedModuleSubheadingName}` : ""
+        }`
       : `${SUBJECT_META[subjectId as keyof typeof SUBJECT_META]?.label || ""} (${targetModule?.name || `B${block}`})${
           selectedSubheading ? ` \u00b7 ${selectedSubheading.name}` : ""
         }`;
@@ -364,6 +412,43 @@ export default function PracticeSetup() {
                 </Pill>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Subheading — Module-wide picker, shown when practicing a whole Module ("Practice
+            Module") that has published MCQs tagged with subheadings across its subjects. */}
+        {isModuleExam && (moduleSubheadingNames.length > 0 || !moduleSubheadingsLoaded) && (
+          <div>
+            <span className="mb-2 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
+              Subheading
+            </span>
+            {!moduleSubheadingsLoaded ? (
+              <p className="flex items-center gap-1.5 text-xs" style={{ color: t.textMuted }}>
+                <Loader2 size={13} className="animate-spin" /> Checking subheadings&hellip;
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Pill
+                  t={t}
+                  tone="muted"
+                  active={selectedModuleSubheadingName === ""}
+                  onClick={() => setSelectedModuleSubheadingName("")}
+                >
+                  All Subheadings
+                </Pill>
+                {moduleSubheadingNames.map((name) => (
+                  <Pill
+                    key={name}
+                    t={t}
+                    tone="teal"
+                    active={selectedModuleSubheadingName === name}
+                    onClick={() => setSelectedModuleSubheadingName(name)}
+                  >
+                    {name}
+                  </Pill>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

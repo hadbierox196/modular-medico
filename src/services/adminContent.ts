@@ -416,6 +416,36 @@ export async function deleteQuestion(id: string, qText?: string) {
   }
 }
 
+/**
+ * Delete many questions at once (e.g. every MCQ under a subheading). Mirrors deleteQuestion
+ * but batches the Firestore writes and updates local storage a single time at the end,
+ * which matters once a subheading has dozens of MCQs.
+ */
+export async function bulkDeleteQuestions(items: { id: string; q: string }[]) {
+  if (items.length === 0) return;
+
+  items.forEach((item) => {
+    if (item.id) markQuestionDeleted(item.id);
+    if (item.q) markQuestionDeleted(item.q);
+  });
+
+  const idSet = new Set(items.map((i) => i.id));
+  const textSet = new Set(items.map((i) => i.q.trim().toLowerCase()));
+  const localQuestions: FirestoreQuestion[] = JSON.parse(localStorage.getItem("modular_medico_local_qs") || "[]");
+  const filtered = localQuestions.filter((q) => !idSet.has(q.id) && !textSet.has(q.q.trim().toLowerCase()));
+  localStorage.setItem("modular_medico_local_qs", JSON.stringify(filtered));
+
+  try {
+    const batch = writeBatch(db);
+    items.forEach((item) => {
+      if (item.id) batch.delete(doc(db, "questions", item.id));
+    });
+    await batch.commit();
+  } catch (err) {
+    console.warn("Firestore bulkDeleteQuestions batch failed:", err);
+  }
+}
+
 function getLocalQuestions(): FirestoreQuestion[] {
   try {
     const deleted = getDeletedQuestionIds();
@@ -601,8 +631,15 @@ export async function fetchPublishedBlock(
 export async function fetchPublishedModuleExam(
   block: number,
   moduleId: string,
-  difficulty?: Difficulty | "all"
+  difficulty?: Difficulty | "all",
+  subheadingName?: string | null
 ): Promise<FirestoreQuestion[]> {
+  // Subheadings are scoped per-subject, but a Module spans multiple subjects, so we
+  // group by the human-readable subheadingName (same approach the admin bank filter
+  // uses) rather than subheadingId, which would only match within a single subject.
+  const applySubheadingFilter = (list: FirestoreQuestion[]) =>
+    subheadingName ? list.filter((item) => (item.subheadingName || "General / No subheading") === subheadingName) : list;
+
   try {
     const clauses = [
       where("block", "==", block),
@@ -634,17 +671,19 @@ export async function fetchPublishedModuleExam(
     localQs.forEach((lq) => map.set(lq.q.trim().toLowerCase(), lq));
     fsResults.forEach((fq) => map.set(fq.q.trim().toLowerCase(), fq));
 
-    const combined = Array.from(map.values());
+    const combined = applySubheadingFilter(Array.from(map.values()));
     if (combined.length > 0) return combined;
   } catch (err) {
     console.warn("Firestore fetchPublishedModuleExam failed, using default questions:", err);
   }
 
-  return DEFAULT_QUESTIONS.filter((dq) => {
-    if (dq.block !== block || dq.moduleId !== moduleId || dq.status !== "published") return false;
-    if (difficulty && difficulty !== "all" && dq.difficulty !== difficulty) return false;
-    return true;
-  });
+  return applySubheadingFilter(
+    DEFAULT_QUESTIONS.filter((dq) => {
+      if (dq.block !== block || dq.moduleId !== moduleId || dq.status !== "published") return false;
+      if (difficulty && difficulty !== "all" && dq.difficulty !== difficulty) return false;
+      return true;
+    })
+  );
 }
 
 /** One-time fetch of all published questions for an entire Block across all subjects */
