@@ -529,8 +529,12 @@ export async function fetchPublishedBlock(
   subjectId: string,
   moduleId?: string,
   block?: number,
-  difficulty?: Difficulty | "all"
+  difficulty?: Difficulty | "all",
+  subheadingId?: string | null
 ): Promise<FirestoreQuestion[]> {
+  const applySubheadingFilter = (list: FirestoreQuestion[]) =>
+    subheadingId ? list.filter((item) => item.subheadingId === subheadingId) : list;
+
   try {
     const clauses = [
       where("subjectId", "==", subjectId),
@@ -573,22 +577,24 @@ export async function fetchPublishedBlock(
     localQs.forEach((lq) => map.set(lq.q.trim().toLowerCase(), lq));
     fsResults.forEach((fq) => map.set(fq.q.trim().toLowerCase(), fq));
 
-    const combined = Array.from(map.values());
+    const combined = applySubheadingFilter(Array.from(map.values()));
     if (combined.length > 0) return combined;
   } catch (err) {
     console.warn("Firestore fetchPublishedBlock failed, using default questions:", err);
   }
 
   // Fallback to local default questions
-  return DEFAULT_QUESTIONS.filter((dq) => {
-    if (dq.subjectId !== subjectId || dq.status !== "published") return false;
-    if (moduleId && moduleId !== "all" && moduleId !== "custom") {
-      if (dq.moduleId !== moduleId && dq.moduleName.toLowerCase() !== moduleId.toLowerCase()) return false;
-    }
-    if (block && block > 0 && dq.block !== block) return false;
-    if (difficulty && difficulty !== "all" && dq.difficulty !== difficulty) return false;
-    return true;
-  });
+  return applySubheadingFilter(
+    DEFAULT_QUESTIONS.filter((dq) => {
+      if (dq.subjectId !== subjectId || dq.status !== "published") return false;
+      if (moduleId && moduleId !== "all" && moduleId !== "custom") {
+        if (dq.moduleId !== moduleId && dq.moduleName.toLowerCase() !== moduleId.toLowerCase()) return false;
+      }
+      if (block && block > 0 && dq.block !== block) return false;
+      if (difficulty && difficulty !== "all" && dq.difficulty !== difficulty) return false;
+      return true;
+    })
+  );
 }
 
 /** One-time fetch of all published questions for a specific Module across all subjects */

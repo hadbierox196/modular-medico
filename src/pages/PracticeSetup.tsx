@@ -23,11 +23,12 @@ import { useAppStore, useIsLoggedIn, useIsPremium } from "../store/useAppStore";
 import { SUBJECT_META, isSubjectId, DEFAULT_BLOCK_DEFINITIONS, type BlockDefinition } from "../data/subjects";
 import {
   subscribeBlockDefinitions,
+  subscribeSubheadings,
   fetchPublishedBlock,
   fetchPublishedBlockExam,
   fetchPublishedModuleExam,
 } from "../services/adminContent";
-import type { Difficulty, PracticeConfig } from "../types";
+import type { Difficulty, PracticeConfig, SubheadingDoc } from "../types";
 
 const TIMER_PRESETS = [
   { label: "3 min", seconds: 180 },
@@ -62,6 +63,11 @@ export default function PracticeSetup() {
   const [loading, setLoading] = useState(false);
   const [count, setCount] = useState<number | null>(null);
 
+  // Subheading picker — 4th tier of the hierarchy (Block -> Module -> Subject -> Subheading).
+  // Only relevant when practicing a single Subject within a single Module.
+  const [subheadings, setSubheadings] = useState<SubheadingDoc[]>([]);
+  const [selectedSubheadingId, setSelectedSubheadingId] = useState<string>("");
+
   // Force strict settings in Exam mode
   useEffect(() => {
     if (mode === "exam") {
@@ -81,6 +87,18 @@ export default function PracticeSetup() {
   const isModuleExam = subjectId === "all" && moduleId !== "all";
   const isSubjectInModule = isSubjectId(subjectId);
 
+  // Load subheadings scoped to this exact Block + Module + Subject, resetting the
+  // selection whenever the underlying scope changes.
+  useEffect(() => {
+    setSelectedSubheadingId("");
+    if (!isSubjectInModule) {
+      setSubheadings([]);
+      return;
+    }
+    return subscribeSubheadings(block, moduleId, subjectId, setSubheadings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSubjectInModule, block, moduleId, subjectId]);
+
   const moduleDisplayName = isFullBlock
     ? `${blockDef?.title || `Block ${block}`} (All Modules)`
     : isModuleExam
@@ -88,6 +106,8 @@ export default function PracticeSetup() {
     : `${SUBJECT_META[subjectId as keyof typeof SUBJECT_META]?.label || subjectId} \u00b7 ${targetModule?.name || `Block ${block}`}`;
 
   const locked = block !== 1 && !isPremium;
+
+  const selectedSubheading = subheadings.find((s) => s.id === selectedSubheadingId) || null;
 
   useEffect(() => {
     if (locked) return;
@@ -102,12 +122,12 @@ export default function PracticeSetup() {
         if (mode === "exam") setTimerSeconds(qs.length * 60);
       });
     } else if (isSubjectInModule) {
-      fetchPublishedBlock(subjectId, moduleId, block).then((qs) => {
+      fetchPublishedBlock(subjectId, moduleId, block, undefined, selectedSubheadingId || null).then((qs) => {
         setCount(qs.length);
         if (mode === "exam") setTimerSeconds(qs.length * 60);
       });
     }
-  }, [locked, subjectId, moduleId, block, isFullBlock, isModuleExam, isSubjectInModule, mode]);
+  }, [locked, subjectId, moduleId, block, isFullBlock, isModuleExam, isSubjectInModule, mode, selectedSubheadingId]);
 
   if (!Number.isInteger(block) || (!isFullBlock && !isModuleExam && !isSubjectInModule)) {
     return (
@@ -147,7 +167,7 @@ export default function PracticeSetup() {
     } else if (isModuleExam) {
       questions = await fetchPublishedModuleExam(block, moduleId, diff);
     } else {
-      questions = await fetchPublishedBlock(subjectId, moduleId, block, diff);
+      questions = await fetchPublishedBlock(subjectId, moduleId, block, diff, selectedSubheadingId || null);
     }
     setLoading(false);
     if (questions.length === 0) return;
@@ -166,7 +186,9 @@ export default function PracticeSetup() {
       ? `Block ${block}: Full Exam`
       : isModuleExam
       ? `Block ${block} \u00b7 ${targetModule?.name || moduleId}`
-      : `${SUBJECT_META[subjectId as keyof typeof SUBJECT_META]?.label || ""} (${targetModule?.name || `B${block}`})`;
+      : `${SUBJECT_META[subjectId as keyof typeof SUBJECT_META]?.label || ""} (${targetModule?.name || `B${block}`})${
+          selectedSubheading ? ` \u00b7 ${selectedSubheading.name}` : ""
+        }`;
 
     startSession(
       {
@@ -319,6 +341,31 @@ export default function PracticeSetup() {
             </div>
           )}
         </div>
+
+        {/* Subheading — 4th tier of the hierarchy, only shown when this Subject/Module has any */}
+        {isSubjectInModule && subheadings.length > 0 && (
+          <div>
+            <span className="mb-2 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
+              Subheading
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <Pill t={t} tone="muted" active={selectedSubheadingId === ""} onClick={() => setSelectedSubheadingId("")}>
+                All Subheadings
+              </Pill>
+              {subheadings.map((s) => (
+                <Pill
+                  key={s.id}
+                  t={t}
+                  tone="teal"
+                  active={selectedSubheadingId === s.id}
+                  onClick={() => setSelectedSubheadingId(s.id)}
+                >
+                  {s.name}
+                </Pill>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Difficulty */}
         <div>
