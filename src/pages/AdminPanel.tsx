@@ -169,6 +169,18 @@ export default function AdminPanel() {
     if (selectedSubheadingId === sh.id) setSelectedSubheadingId("");
   };
 
+  // Resolves whatever is currently in the Subheading field to a concrete
+  // { id, name } at save time — so typing a name and hitting Save works
+  // even if the separate "Add" button was never clicked first.
+  const resolveSubheadingForSave = async (): Promise<{ id: string | null; name: string | null }> => {
+    if (selectedSubheading) return { id: selectedSubheading.id, name: selectedSubheading.name };
+    const typed = newSubheadingName.trim();
+    if (!typed) return { id: null, name: null };
+    const id = await createSubheading(effectiveBlock, effectiveModuleId, subjectId, typed);
+    setSelectedSubheadingId(id);
+    return { id, name: typed };
+  };
+
   // Real-time Bracket Parse
   const parsedBracketResults = useMemo(() => {
     if (!bracketText.trim()) return [];
@@ -187,13 +199,14 @@ export default function AdminPanel() {
   const handleSaveBracket = async () => {
     if (validParsedMCQs.length === 0) return;
     try {
+      const subheading = await resolveSubheadingForSave();
       const itemsToSave = validParsedMCQs.map((v) => ({
         subjectId,
         moduleId: effectiveModuleId,
         moduleName: effectiveModuleName,
         block: effectiveBlock,
-        subheadingId: selectedSubheading?.id ?? null,
-        subheadingName: selectedSubheading?.name ?? null,
+        subheadingId: subheading.id,
+        subheadingName: subheading.name,
         difficulty,
         q: v.q!,
         options: v.options!,
@@ -224,13 +237,14 @@ export default function AdminPanel() {
   const handleSaveTraditional = async (addAnother = false) => {
     if (!isTraditionalValid) return;
     try {
+      const subheading = await resolveSubheadingForSave();
       await addQuestion({
         subjectId,
         moduleId: effectiveModuleId,
         moduleName: effectiveModuleName,
         block: effectiveBlock,
-        subheadingId: selectedSubheading?.id ?? null,
-        subheadingName: selectedSubheading?.name ?? null,
+        subheadingId: subheading.id,
+        subheadingName: subheading.name,
         difficulty,
         q: traditionalQ.trim(),
         options: options.map((o) => o.trim()),
