@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Shell from "./components/Shell";
 import AdminLayout from "./components/AdminLayout";
 import Home from "./pages/Home";
@@ -21,6 +21,14 @@ import { subscribeAuth } from "./services/auth";
 import { subscribeUserProfile } from "./services/firestore";
 import { useAppStore } from "./store/useAppStore";
 import { initAnalytics } from "./firebase";
+
+// Blocks direct access to /admin. Anyone who isn't already unlocked (via the
+// admin-gate password screen) gets bounced to /admin-gate instead of seeing the panel.
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  const isAdmin = useAppStore((s) => s.isAdmin);
+  if (!isAdmin) return <Navigate to="/admin-gate" replace />;
+  return <>{children}</>;
+}
 
 export default function App() {
   const setAuthUser = useAppStore((s) => s.setAuthUser);
@@ -76,7 +84,14 @@ export default function App() {
         {/* Admin — deliberately outside the student shell and not linked from the homepage */}
         <Route element={<AdminLayout />}>
           <Route path="/admin-gate" element={<AdminGate />} />
-          <Route path="/admin" element={<AdminPanel />} />
+          <Route
+            path="/admin"
+            element={
+              <RequireAdmin>
+                <AdminPanel />
+              </RequireAdmin>
+            }
+          />
         </Route>
 
         <Route path="*" element={<NotFound />} />

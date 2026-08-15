@@ -6,7 +6,9 @@ import Btn from "../components/Btn";
 import { THEME, FONT_DISPLAY } from "../theme";
 import { useAppStore } from "../store/useAppStore";
 
-const ADMIN_GATE_PASSWORD = import.meta.env.VITE_ADMIN_GATE_PASSWORD as string | undefined;
+// Admin gate password. Can be overridden by setting VITE_ADMIN_GATE_PASSWORD in the
+// environment; otherwise it falls back to this default.
+const ADMIN_GATE_PASSWORD = (import.meta.env.VITE_ADMIN_GATE_PASSWORD as string | undefined) || "admin@irfan.com";
 
 export default function AdminGate() {
   const navigate = useNavigate();
