@@ -106,7 +106,6 @@ export default function AdminPanel() {
   /* ------------------------------------------------------------------------- */
   const [subheadings, setSubheadings] = useState<SubheadingDoc[]>([]);
   const [selectedSubheadingId, setSelectedSubheadingId] = useState<string>("");
-  const [showNewSubheadingInput, setShowNewSubheadingInput] = useState(false);
   const [newSubheadingName, setNewSubheadingName] = useState("");
   const [creatingSubheading, setCreatingSubheading] = useState(false);
 
@@ -144,7 +143,6 @@ export default function AdminPanel() {
   // selection when it no longer applies to the freshly-loaded list.
   useEffect(() => {
     setSelectedSubheadingId("");
-    setShowNewSubheadingInput(false);
     setNewSubheadingName("");
     const unsub = subscribeSubheadings(effectiveBlock, effectiveModuleId, subjectId, setSubheadings);
     return unsub;
@@ -161,7 +159,6 @@ export default function AdminPanel() {
       const id = await createSubheading(effectiveBlock, effectiveModuleId, subjectId, name);
       setSelectedSubheadingId(id);
       setNewSubheadingName("");
-      setShowNewSubheadingInput(false);
     } finally {
       setCreatingSubheading(false);
     }
@@ -558,57 +555,47 @@ export default function AdminPanel() {
               </div>
             </div>
 
-            {/* 5. Subheading Selector — 4th level of the hierarchy, scoped to this exact Block + Module + Subject */}
+            {/* 5. Subheading — 4th level of the hierarchy, scoped to this exact Block + Module + Subject */}
             <div className="mt-4 border-t pt-4" style={{ borderColor: t.border }}>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
-                  <ListTree size={13} /> Subheading (within {SUBJECT_META[subjectId].label})
+                  <ListTree size={13} /> Subheading
                 </label>
                 <span className="text-[11px]" style={{ color: t.textFaint }}>Optional &bull; scoped to Block {effectiveBlock} &bull; {effectiveModuleName}</span>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={selectedSubheadingId}
-                  onChange={(e) => setSelectedSubheadingId(e.target.value)}
+                <input
+                  type="text"
+                  value={selectedSubheading ? selectedSubheading.name : newSubheadingName}
+                  onChange={(e) => {
+                    setSelectedSubheadingId("");
+                    setNewSubheadingName(e.target.value);
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && handleCreateSubheading()}
+                  placeholder="Type a subheading, e.g. Coronary Circulation"
                   className="flex-1 min-w-[200px] rounded-xl px-3 py-2.5 text-sm font-semibold outline-none"
                   style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-                >
-                  <option value="">No subheading (general)</option>
-                  {subheadings.map((s) => (
-                    <option key={s.id} value={s.id} style={{ backgroundColor: t.surface, color: t.text }}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => setShowNewSubheadingInput(!showNewSubheadingInput)}
-                  className="flex items-center gap-1 rounded-xl px-3 py-2.5 text-xs font-bold transition-all"
-                  style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.teal }}
-                >
-                  <Plus size={13} /> New Subheading
-                </button>
-              </div>
-
-              {showNewSubheadingInput && (
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newSubheadingName}
-                    onChange={(e) => setNewSubheadingName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleCreateSubheading()}
-                    placeholder="e.g. Coronary Circulation"
-                    autoFocus
-                    className="flex-1 rounded-xl px-3 py-2 text-sm font-semibold outline-none"
-                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.teal}`, color: t.text }}
-                  />
+                />
+                {selectedSubheading ? (
+                  <button
+                    onClick={() => {
+                      setSelectedSubheadingId("");
+                      setNewSubheadingName("");
+                    }}
+                    className="flex items-center gap-1 rounded-xl px-3 py-2.5 text-xs font-bold transition-all"
+                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.textMuted }}
+                  >
+                    <X size={13} /> Clear
+                  </button>
+                ) : (
                   <Btn t={t} variant="secondary" disabled={!newSubheadingName.trim() || creatingSubheading} onClick={handleCreateSubheading}>
                     {creatingSubheading ? "Adding\u2026" : "Add"}
                   </Btn>
-                </div>
-              )}
+                )}
+              </div>
 
-              {/* Existing subheadings for this scope, with quick delete */}
+              {/* Previously used subheadings in this scope, for quick reuse or removal */}
               {subheadings.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {subheadings.map((s) => (
@@ -617,7 +604,10 @@ export default function AdminPanel() {
                       t={t}
                       tone="teal"
                       active={selectedSubheadingId === s.id}
-                      onClick={() => setSelectedSubheadingId(selectedSubheadingId === s.id ? "" : s.id)}
+                      onClick={() => {
+                        setSelectedSubheadingId(s.id);
+                        setNewSubheadingName("");
+                      }}
                     >
                       {s.name}
                       <X
