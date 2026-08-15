@@ -1,22 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Layers,
-  Search,
-  UploadCloud,
   PlusCircle,
+  Search,
   CheckCircle2,
   AlertTriangle,
   XCircle,
+  Trash2,
   Eye,
   EyeOff,
-  Trash2,
+  Sparkles,
   BookOpen,
-  LayoutGrid,
+  Layers,
+  HelpCircle,
   Check,
   Plus,
-  Settings,
-  ShieldCheck,
+  ArrowRight,
+  Filter,
+  RefreshCw,
 } from "lucide-react";
 import Card from "../components/Card";
 import Pill from "../components/Pill";
@@ -28,1608 +29,251 @@ import {
   SUBJECT_META,
   MASTER_MODULES,
   TOTAL_BLOCKS,
-  DEFAULT_BLOCK_DEFINITIONS,
   type SubjectId,
-  type BlockDefinition,
 } from "../data/subjects";
 import {
-  subscribeModules,
-  saveSubjectModules,
   addQuestion,
   bulkAddQuestions,
   updateQuestionStatus,
   deleteQuestion,
-  subscribeSubjectQuestions,
   subscribeAllQuestions,
-  subscribeBlockDefinitions,
-  saveBlockDefinitions,
 } from "../services/adminContent";
 import { parseBracketFormat } from "../utils/parseBracketFormat";
-import type { Difficulty, FirestoreQuestion, ImportResult, ModuleDoc } from "../types";
+import type { Difficulty, FirestoreQuestion, QuestionStatus } from "../types";
 
-const TABS = [
-  { id: "dashboard", label: "Dashboard", icon: Layers },
-  { id: "mcq_block", label: "Add MCQ (Block > Subject)", icon: PlusCircle },
-  { id: "block_config", label: "Block Curriculum Builder", icon: Settings },
-  { id: "mcq_module", label: "MCQ Module Wise", icon: LayoutGrid },
-  { id: "subject_modules", label: "Subject Modules", icon: BookOpen },
-  { id: "import", label: "Bulk Import", icon: UploadCloud },
-  { id: "bank", label: "Question Bank", icon: Search },
+const ADMIN_TABS = [
+  { id: "add_mcq", label: "Add MCQs", icon: PlusCircle },
+  { id: "manage_mcq", label: "Manage MCQs & Bank", icon: Search },
 ] as const;
+
+type AdminTab = typeof ADMIN_TABS[number]["id"];
 
 const DIFF_TONE: Record<Difficulty, string> = { easy: "green", medium: "gold", hard: "red" };
 
-function pickTheme() {
-  return THEME.dark;
-}
+const SAMPLE_BRACKET_TEMPLATE = `[What is the primary pacemaker of the human heart? ; Sinoatrial (SA) node* | Atrioventricular (AV) node | Bundle of His | Purkinje fibers ; The SA node in the right atrium initiates normal cardiac electrical impulses at 60-100 bpm.]
 
-/* ========================================================================= */
-/* 1. PRIMARY AUTHORING TAB: MCQ BLOCK > MODULE > SUBJECT WISE              */
-/* ========================================================================= */
-function McqBlockWiseTab({ t }: { t: ReturnType<typeof pickTheme> }) {
-  const [blockDefs, setBlockDefs] = useState<BlockDefinition[]>(DEFAULT_BLOCK_DEFINITIONS);
-  const [selectedBlock, setSelectedBlock] = useState<number>(1);
-  const [selectedModuleId, setSelectedModuleId] = useState<string>("b1-m1");
-  const [subjectId, setSubjectId] = useState<SubjectId>("gross_anatomy");
-  const [difficulty, setDifficulty] = useState<Difficulty>("medium");
+[Which muscle initiates abduction of the shoulder for the first 15 degrees? ; Supraspinatus* | Deltoid | Infraspinatus | Subscapularis ; Supraspinatus initiates abduction (0-15°), after which the deltoid takes over (15-90°).]
 
-  // Question content fields
-  const [q, setQ] = useState("");
-  const [options, setOptions] = useState(["", "", "", ""]);
-  const [correct, setCorrect] = useState(0);
-  const [explanation, setExplanation] = useState("");
-  const [status, setStatus] = useState<"saved" | "error" | null>(null);
-  const [inputMode, setInputMode] = useState<"form" | "bracket">("form");
-  const [bracketText, setBracketText] = useState("");
-  const [publishImmediately, setPublishImmediately] = useState(true);
+[Which enzyme catalyzes the rate-limiting step of glycolysis? ; Phosphofructokinase-1 (PFK-1)* | Hexokinase | Pyruvate kinase | Aldolase ; PFK-1 catalyzes the irreversible conversion of fructose-6-phosphate to fructose-1,6-bisphosphate.]`;
 
-  useEffect(() => {
-    return subscribeBlockDefinitions(setBlockDefs);
-  }, []);
-
-  const currentBlockDef = useMemo(() => {
-    return blockDefs.find((b) => b.block === selectedBlock) || DEFAULT_BLOCK_DEFINITIONS[0];
-  }, [blockDefs, selectedBlock]);
-
-  const blockModules = useMemo(() => {
-    return currentBlockDef.modules || [];
-  }, [currentBlockDef]);
-
-  // When block changes, ensure selectedModuleId is valid
-  useEffect(() => {
-    if (blockModules.length > 0) {
-      if (!blockModules.some((m) => m.id === selectedModuleId)) {
-        setSelectedModuleId(blockModules[0].id);
-      }
-    }
-  }, [selectedBlock, blockModules, selectedModuleId]);
-
-  const currentModule = useMemo(() => {
-    return blockModules.find((m) => m.id === selectedModuleId) || blockModules[0];
-  }, [blockModules, selectedModuleId]);
-
-  const moduleSubjects = useMemo(() => {
-    return currentModule?.subjects || [];
-  }, [currentModule]);
-
-  // When module changes, ensure subjectId is valid for this module
-  useEffect(() => {
-    if (moduleSubjects.length > 0 && !moduleSubjects.includes(subjectId)) {
-      setSubjectId(moduleSubjects[0]);
-    }
-  }, [moduleSubjects, subjectId]);
-
-  const currentModuleName = currentModule?.name || "Module";
-  const validForm = q.trim() && options.every((o) => o.trim()) && explanation.trim();
-
-  const handleSaveForm = async () => {
-    if (!validForm) return;
-    try {
-      await addQuestion({
-        subjectId,
-        moduleId: selectedModuleId,
-        moduleName: currentModuleName,
-        block: selectedBlock,
-        difficulty,
-        q: q.trim(),
-        options: options.map((o) => o.trim()),
-        correct,
-        explanation: explanation.trim(),
-        status: publishImmediately ? "published" : "draft",
-      });
-      setQ("");
-      setOptions(["", "", "", ""]);
-      setExplanation("");
-      setCorrect(0);
-      setStatus("saved");
-      setTimeout(() => setStatus(null), 3000);
-    } catch {
-      setStatus("error");
-    }
-  };
-
-  const handleSaveBracket = async () => {
-    if (!bracketText.trim()) return;
-    const parsed = parseBracketFormat(bracketText);
-    const valid = parsed.filter((p) => p.status !== "error" && p.q && p.options && p.correct !== undefined);
-    if (valid.length === 0) return;
-
-    try {
-      await bulkAddQuestions(
-        valid.map((v) => ({
-          subjectId,
-          moduleId: selectedModuleId,
-          moduleName: currentModuleName,
-          block: selectedBlock,
-          difficulty,
-          q: v.q!,
-          options: v.options!,
-          correct: v.correct!,
-          explanation: "",
-          status: publishImmediately ? "published" : "draft",
-        }))
-      );
-      setBracketText("");
-      setStatus("saved");
-      setTimeout(() => setStatus(null), 3000);
-    } catch {
-      setStatus("error");
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-2xl p-4" style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}` }}>
-        <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
-          Add MCQ — Block &gt; Module &gt; Subject Architecture
-        </h2>
-        <p style={{ color: t.textMuted, fontSize: 13 }}>
-          Step 1: Choose Block (1–15) &rarr; Step 2: Choose Module in Block &rarr; Step 3: Choose Subject in Module &rarr; Step 4: Enter Questions.
-        </p>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-12">
-        {/* Left Column: Block, Module & Subject Selector */}
-        <Card t={t} className="flex flex-col gap-4 lg:col-span-4">
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-                1. Select Block (1–15)
-              </span>
-              <span className="text-xs font-semibold" style={{ color: t.teal }}>
-                {currentBlockDef.year}
-              </span>
-            </div>
-            <div className="grid grid-cols-5 gap-1.5">
-              {Array.from({ length: TOTAL_BLOCKS }, (_, i) => i + 1).map((b) => (
-                <button
-                  key={b}
-                  type="button"
-                  onClick={() => setSelectedBlock(b)}
-                  className="rounded-xl py-2 text-xs font-bold transition-all text-center"
-                  style={{
-                    backgroundColor: selectedBlock === b ? t.purpleStrong : t.surfaceAlt,
-                    color: selectedBlock === b ? "#fff" : t.textMuted,
-                    border: `1.5px solid ${selectedBlock === b ? t.purpleStrong : t.border}`,
-                  }}
-                >
-                  B{b}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-xs font-medium" style={{ color: t.textMuted }}>
-              <span className="font-bold text-white">Block {currentBlockDef.block}:</span> {currentBlockDef.title}
-            </p>
-          </div>
-
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-                2. Select Module in Block {selectedBlock}
-              </span>
-              <span style={{ color: t.teal, fontSize: 11 }}>
-                {blockModules.length} {blockModules.length === 1 ? "module" : "modules"}
-              </span>
-            </div>
-
-            <select
-              value={selectedModuleId}
-              onChange={(e) => setSelectedModuleId(e.target.value)}
-              className="w-full rounded-xl px-3.5 py-2.5 text-sm font-semibold outline-none"
-              style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-            >
-              {blockModules.map((m, idx) => (
-                <option key={m.id} value={m.id}>
-                  Module {idx + 1}: {m.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-                3. Subject in Module
-              </span>
-              <span style={{ color: t.teal, fontSize: 11 }}>
-                {moduleSubjects.length} subjects in module
-              </span>
-            </div>
-
-            <select
-              value={subjectId}
-              onChange={(e) => setSubjectId(e.target.value as SubjectId)}
-              className="w-full rounded-xl px-3.5 py-2.5 text-sm font-semibold outline-none"
-              style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-            >
-              <optgroup label={`Subjects in ${currentModuleName}`}>
-                {moduleSubjects.map((id) => (
-                  <option key={id} value={id}>
-                    {SUBJECT_META[id]?.label || id}
-                  </option>
-                ))}
-              </optgroup>
-              {SUBJECT_LIST.some((id) => !moduleSubjects.includes(id)) && (
-                <optgroup label="Other MBBS Subjects">
-                  {SUBJECT_LIST.filter((id) => !moduleSubjects.includes(id)).map((id) => (
-                    <option key={id} value={id}>
-                      {SUBJECT_META[id]?.label || id} (Non-standard)
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-          </div>
-
-          <div>
-            <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-              Difficulty
-            </span>
-            <div className="flex gap-2">
-              {(["easy", "medium", "hard"] as Difficulty[]).map((d) => (
-                <Pill key={d} t={t} tone={DIFF_TONE[d]} active={difficulty === d} onClick={() => setDifficulty(d)}>
-                  {d}
-                </Pill>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-2 flex items-center justify-between rounded-xl p-3 text-xs" style={{ backgroundColor: t.surfaceAlt }}>
-            <span style={{ color: t.textMuted }}>Publish immediately (Students see it live)</span>
-            <input
-              type="checkbox"
-              checked={publishImmediately}
-              onChange={(e) => setPublishImmediately(e.target.checked)}
-              className="h-4 w-4 rounded accent-teal-500"
-            />
-          </div>
-        </Card>
-
-        {/* Right Column: Question Content Authoring */}
-        <Card t={t} className="flex flex-col gap-4 lg:col-span-8">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3" style={{ borderColor: t.border }}>
-            <div className="flex items-center gap-2">
-              <ShieldCheck size={16} color={t.teal} />
-              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16 }}>
-                Block {selectedBlock} &bull; {currentModuleName} &bull; {SUBJECT_META[subjectId]?.label}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setInputMode("form")}
-                className="rounded-xl px-3 py-1.5 text-xs font-bold"
-                style={{
-                  backgroundColor: inputMode === "form" ? t.purpleStrong : t.surfaceAlt,
-                  color: inputMode === "form" ? "#fff" : t.textMuted,
-                }}
-              >
-                Form Mode
-              </button>
-              <button
-                onClick={() => setInputMode("bracket")}
-                className="rounded-xl px-3 py-1.5 text-xs font-bold"
-                style={{
-                  backgroundColor: inputMode === "bracket" ? t.purpleStrong : t.surfaceAlt,
-                  color: inputMode === "bracket" ? "#fff" : t.textMuted,
-                }}
-              >
-                Bracket Text Mode
-              </button>
-            </div>
-          </div>
-
-          {inputMode === "form" ? (
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-                  Question Stem
-                </label>
-                <textarea
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="e.g. A 28-year-old patient presents with symptoms of..."
-                  rows={3}
-                  className="w-full rounded-xl px-3.5 py-2.5 text-sm outline-none"
-                  style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-                />
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-                  Options (Click letter circle to mark the correct answer)
-                </label>
-                <div className="flex flex-col gap-2">
-                  {options.map((opt, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setCorrect(i)}
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all"
-                        style={{
-                          border: `2px solid ${correct === i ? t.green : t.textFaint}`,
-                          backgroundColor: correct === i ? t.green : "transparent",
-                          color: correct === i ? "#fff" : t.textFaint,
-                        }}
-                        title={`Set Option ${String.fromCharCode(65 + i)} as correct`}
-                      >
-                        {String.fromCharCode(65 + i)}
-                      </button>
-                      <input
-                        value={opt}
-                        onChange={(e) => setOptions(options.map((o, oi) => (oi === i ? e.target.value : o)))}
-                        placeholder={`Option ${String.fromCharCode(65 + i)}`}
-                        className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
-                        style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-                  Clinical Explanation &amp; Distractor Rationale
-                </label>
-                <textarea
-                  value={explanation}
-                  onChange={(e) => setExplanation(e.target.value)}
-                  placeholder="Provide high-yield medical rationale and why incorrect options fail..."
-                  rows={3}
-                  className="w-full rounded-xl px-3.5 py-2.5 text-sm outline-none"
-                  style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-                />
-              </div>
-
-              <Btn t={t} full disabled={!validForm} onClick={handleSaveForm}>
-                Save MCQ to Block {selectedBlock} &bull; {currentModuleName} &bull; {SUBJECT_META[subjectId]?.label} ({publishImmediately ? "Published" : "Draft"})
-              </Btn>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <p className="text-xs" style={{ color: t.textMuted }}>
-                Paste bracket format MCQs for Block {selectedBlock} &bull; {currentModuleName} &bull; {SUBJECT_META[subjectId]?.label}:
-              </p>
-              <pre
-                className="rounded-xl p-3 text-xs"
-                style={{ backgroundColor: t.surfaceAlt, fontFamily: FONT_MONO, color: t.teal, whiteSpace: "pre-wrap" }}
-              >
-                {`[Which nerve is injured in surgical neck fracture of humerus? ; *Axillary nerve | Radial nerve | Ulnar nerve | Median nerve]`}
-              </pre>
-              <textarea
-                value={bracketText}
-                onChange={(e) => setBracketText(e.target.value)}
-                placeholder="Paste bracket format MCQs here..."
-                rows={6}
-                className="w-full rounded-xl px-3.5 py-2.5 text-sm outline-none"
-                style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text, fontFamily: FONT_MONO }}
-              />
-              <Btn t={t} full disabled={!bracketText.trim()} onClick={handleSaveBracket}>
-                Save Bracket MCQs to Block {selectedBlock} &bull; {currentModuleName}
-              </Btn>
-            </div>
-          )}
-
-          {status === "saved" && (
-            <div className="flex items-center gap-2 rounded-xl p-3 text-xs font-bold" style={{ backgroundColor: `${t.green}18`, color: t.green }}>
-              <CheckCircle2 size={16} /> Question successfully saved to Block {selectedBlock} ({currentModuleName})!
-            </div>
-          )}
-          {status === "error" && (
-            <div className="flex items-center gap-2 rounded-xl p-3 text-xs font-bold" style={{ backgroundColor: `${t.red}18`, color: t.red }}>
-              <XCircle size={16} /> Could not save question. Please check Firestore connection.
-            </div>
-          )}
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-/* ========================================================================= */
-/* 2. BLOCK CURRICULUM CONFIGURATOR (BLOCK -> MODULE(S) -> SUBJECTS)         */
-/* ========================================================================= */
-function BlockCurriculumConfigTab({ t }: { t: ReturnType<typeof pickTheme> }) {
-  const [blockDefs, setBlockDefs] = useState<BlockDefinition[]>(DEFAULT_BLOCK_DEFINITIONS);
-  const [selectedBlockNum, setSelectedBlockNum] = useState(1);
-  const [selectedModIndex, setSelectedModIndex] = useState(0);
-  const [statusMsg, setStatusMsg] = useState("");
-
-  useEffect(() => {
-    return subscribeBlockDefinitions(setBlockDefs);
-  }, []);
-
-  const activeDef = blockDefs.find((b) => b.block === selectedBlockNum) || DEFAULT_BLOCK_DEFINITIONS[0];
-  const modules = activeDef.modules || [];
-  const currentModule = modules[selectedModIndex] || modules[0];
-
-  const handleToggleSubjectInModule = async (subjId: SubjectId) => {
-    if (!currentModule) return;
-    const isPresent = currentModule.subjects.includes(subjId);
-    const updatedSubjects = isPresent
-      ? currentModule.subjects.filter((s) => s !== subjId)
-      : [...currentModule.subjects, subjId];
-
-    const updatedModules = modules.map((m, idx) =>
-      idx === selectedModIndex ? { ...m, subjects: updatedSubjects } : m
-    );
-
-    const nextDefs = blockDefs.map((b) =>
-      b.block === selectedBlockNum ? { ...b, modules: updatedModules } : b
-    );
-    setBlockDefs(nextDefs);
-    await saveBlockDefinitions(nextDefs);
-    setStatusMsg(`Updated subjects in ${currentModule.name}`);
-    setTimeout(() => setStatusMsg(""), 2500);
-  };
-
-  const handleUpdateBlockMetadata = async (field: keyof BlockDefinition, value: any) => {
-    const nextDefs = blockDefs.map((b) =>
-      b.block === selectedBlockNum ? { ...b, [field]: value } : b
-    );
-    setBlockDefs(nextDefs);
-    await saveBlockDefinitions(nextDefs);
-    setStatusMsg(`Saved Block ${selectedBlockNum} details`);
-    setTimeout(() => setStatusMsg(""), 2000);
-  };
-
-  const handleUpdateModuleName = async (modIdx: number, newName: string) => {
-    const updatedModules = modules.map((m, idx) => (idx === modIdx ? { ...m, name: newName } : m));
-    const nextDefs = blockDefs.map((b) =>
-      b.block === selectedBlockNum ? { ...b, modules: updatedModules } : b
-    );
-    setBlockDefs(nextDefs);
-    await saveBlockDefinitions(nextDefs);
-  };
-
-  const handleUpdateModuleDescription = async (modIdx: number, newDesc: string) => {
-    const updatedModules = modules.map((m, idx) => (idx === modIdx ? { ...m, description: newDesc } : m));
-    const nextDefs = blockDefs.map((b) =>
-      b.block === selectedBlockNum ? { ...b, modules: updatedModules } : b
-    );
-    setBlockDefs(nextDefs);
-    await saveBlockDefinitions(nextDefs);
-  };
-
-  const handleAddModule = async () => {
-    const newMod: BlockDefinition["modules"][number] = {
-      id: `b${selectedBlockNum}-m${modules.length + 1}`,
-      name: `New Module ${modules.length + 1}`,
-      block: selectedBlockNum,
-      description: "Clinical topics and subjects in this module.",
-      subjects: ["gross_anatomy" as SubjectId, "physiology" as SubjectId],
-    };
-    const updatedModules = [...modules, newMod];
-    const nextDefs = blockDefs.map((b) =>
-      b.block === selectedBlockNum ? { ...b, modules: updatedModules } : b
-    );
-    setBlockDefs(nextDefs);
-    setSelectedModIndex(updatedModules.length - 1);
-    await saveBlockDefinitions(nextDefs);
-    setStatusMsg(`Added Module to Block ${selectedBlockNum}`);
-    setTimeout(() => setStatusMsg(""), 2000);
-  };
-
-  const handleRemoveModule = async (modIdx: number) => {
-    if (modules.length <= 1) return;
-    const updatedModules = modules.filter((_, idx) => idx !== modIdx);
-    const nextDefs = blockDefs.map((b) =>
-      b.block === selectedBlockNum ? { ...b, modules: updatedModules } : b
-    );
-    setBlockDefs(nextDefs);
-    setSelectedModIndex(0);
-    await saveBlockDefinitions(nextDefs);
-    setStatusMsg(`Removed module from Block ${selectedBlockNum}`);
-    setTimeout(() => setStatusMsg(""), 2000);
-  };
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-2xl p-4" style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}` }}>
-        <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
-          Block Curriculum Configurator
-        </h2>
-        <p style={{ color: t.textMuted, fontSize: 13 }}>
-          Hierarchy: <strong>Block (1–15)</strong> &rarr; <strong>Module(s) (1 or 2 per Block)</strong> &rarr; <strong>Subjects in each Module</strong>.
-        </p>
-      </div>
-
-      {statusMsg && (
-        <div className="flex items-center gap-2 rounded-xl p-3 text-xs font-bold" style={{ backgroundColor: `${t.green}18`, color: t.green }}>
-          <CheckCircle2 size={16} /> {statusMsg}
-        </div>
-      )}
-
-      {/* Block Selector 1–15 */}
-      <div className="grid grid-cols-5 gap-2 sm:grid-cols-8 md:grid-cols-15">
-        {blockDefs.map((b) => {
-          const isCurrent = selectedBlockNum === b.block;
-          const modCount = b.modules?.length || 0;
-          return (
-            <button
-              key={b.block}
-              onClick={() => {
-                setSelectedBlockNum(b.block);
-                setSelectedModIndex(0);
-              }}
-              className="flex flex-col items-center justify-center rounded-2xl py-2.5 transition-all text-center"
-              style={{
-                backgroundColor: isCurrent ? t.purpleStrong : t.surfaceAlt,
-                color: isCurrent ? "#fff" : t.text,
-                border: `1.5px solid ${isCurrent ? t.purpleStrong : t.border}`,
-              }}
-            >
-              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14 }}>B{b.block}</span>
-              <span style={{ fontSize: 10, color: isCurrent ? "#ffffffcc" : t.teal }}>
-                {modCount} {modCount === 1 ? "mod" : "mods"}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-12">
-        {/* Left: Block Details & Year Assignment */}
-        <Card t={t} className="flex flex-col gap-4 lg:col-span-4">
-          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16 }}>
-            Block {activeDef.block} Details
-          </span>
-
-          <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-              Block Title / Theme
-            </label>
-            <input
-              value={activeDef.title}
-              onChange={(e) => handleUpdateBlockMetadata("title", e.target.value)}
-              className="w-full rounded-xl px-3.5 py-2 text-sm outline-none font-semibold"
-              style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-              Academic Year
-            </label>
-            <input
-              value={activeDef.year}
-              onChange={(e) => handleUpdateBlockMetadata("year", e.target.value)}
-              className="w-full rounded-xl px-3.5 py-2 text-sm outline-none"
-              style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-              Block Clinical Description
-            </label>
-            <textarea
-              value={activeDef.description}
-              onChange={(e) => handleUpdateBlockMetadata("description", e.target.value)}
-              rows={3}
-              className="w-full rounded-xl px-3.5 py-2 text-sm outline-none"
-              style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-            />
-          </div>
-        </Card>
-
-        {/* Right: Modules & Subjects inside Selected Block */}
-        <Card t={t} className="flex flex-col gap-4 lg:col-span-8">
-          <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: t.border }}>
-            <div>
-              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16 }}>
-                Modules in Block {activeDef.block} ({modules.length} Modules)
-              </span>
-              <p style={{ color: t.textFaint, fontSize: 12 }}>
-                Each Block comprises 1 or 2 modules. In each module, configure constituent subjects.
-              </p>
-            </div>
-            {modules.length < 3 && (
-              <button
-                onClick={handleAddModule}
-                className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all hover:scale-[1.02]"
-                style={{ backgroundColor: t.teal, color: "#fff" }}
-              >
-                <Plus size={14} /> Add Module
-              </button>
-            )}
-          </div>
-
-          {/* Module Tabs in this Block */}
-          <div className="flex gap-2 border-b pb-3" style={{ borderColor: t.border }}>
-            {modules.map((m, idx) => (
-              <button
-                key={m.id}
-                onClick={() => setSelectedModIndex(idx)}
-                className="flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all"
-                style={{
-                  backgroundColor: selectedModIndex === idx ? t.purpleStrong : t.surfaceAlt,
-                  color: selectedModIndex === idx ? "#fff" : t.textMuted,
-                  border: `1px solid ${selectedModIndex === idx ? t.purpleStrong : t.border}`,
-                }}
-              >
-                <span>Module {idx + 1}: {m.name}</span>
-                <span
-                  className="rounded-full px-2 py-0.2 text-[10px]"
-                  style={{ backgroundColor: selectedModIndex === idx ? "#ffffff30" : `${t.teal}20`, color: selectedModIndex === idx ? "#fff" : t.teal }}
-                >
-                  {m.subjects.length} subjs
-                </span>
-              </button>
-            ))}
-          </div>
-
-          {currentModule && (
-            <div className="flex flex-col gap-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-                    Module Name
-                  </label>
-                  <input
-                    value={currentModule.name}
-                    onChange={(e) => handleUpdateModuleName(selectedModIndex, e.target.value)}
-                    className="w-full rounded-xl px-3 py-2 text-sm outline-none font-semibold"
-                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-                    Module Description
-                  </label>
-                  <input
-                    value={currentModule.description || ""}
-                    onChange={(e) => handleUpdateModuleDescription(selectedModIndex, e.target.value)}
-                    className="w-full rounded-xl px-3 py-2 text-sm outline-none"
-                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-                  />
-                </div>
-              </div>
-
-              {/* Subjects inside this Module */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-                    Subjects Taught in {currentModule.name} ({currentModule.subjects.length} Selected)
-                  </span>
-                  {modules.length > 1 && (
-                    <button
-                      onClick={() => handleRemoveModule(selectedModIndex)}
-                      className="text-xs font-semibold hover:underline"
-                      style={{ color: t.red }}
-                    >
-                      Delete this Module
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {SUBJECT_LIST.map((id) => {
-                    const isAssigned = currentModule.subjects.includes(id);
-                    const meta = SUBJECT_META[id];
-                    return (
-                      <div
-                        key={id}
-                        onClick={() => handleToggleSubjectInModule(id)}
-                        className="flex cursor-pointer items-center justify-between rounded-xl p-2.5 text-xs transition-all hover:scale-[1.01]"
-                        style={{
-                          backgroundColor: isAssigned ? `${t.purple}25` : t.surfaceAlt,
-                          border: `1.5px solid ${isAssigned ? t.purpleStrong : t.border}`,
-                        }}
-                      >
-                        <div>
-                          <span className="font-bold block text-sm" style={{ color: isAssigned ? "#fff" : t.textMuted }}>
-                            {meta.label}
-                          </span>
-                          <span className="text-[11px]" style={{ color: t.textFaint }}>
-                            {meta.tag}
-                          </span>
-                        </div>
-                        <div
-                          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-white transition-all"
-                          style={{ backgroundColor: isAssigned ? t.green : `${t.border}` }}
-                        >
-                          {isAssigned && <Check size={12} />}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-/* ========================================================================= */
-/* 3. MCQ MODULE WISE TAB (DIRECT SUBJECT > MODULE)                         */
-/* ========================================================================= */
-function McqModuleWiseTab({ t }: { t: ReturnType<typeof pickTheme> }) {
-  const [subjectId, setSubjectId] = useState<SubjectId>(SUBJECT_LIST[0]);
-  const [modules, setModules] = useState<ModuleDoc[]>([]);
-  const [moduleId, setModuleId] = useState("");
-  const [block, setBlock] = useState(1);
-  const [difficulty, setDifficulty] = useState<Difficulty>("medium");
-
-  const [q, setQ] = useState("");
-  const [options, setOptions] = useState(["", "", "", ""]);
-  const [correct, setCorrect] = useState(0);
-  const [explanation, setExplanation] = useState("");
-  const [status, setStatus] = useState<"saved" | "error" | null>(null);
-  const [publishImmediately, setPublishImmediately] = useState(true);
-
-  useEffect(() => {
-    return subscribeModules(subjectId, (mods) => {
-      setModules(mods);
-      if (mods.length > 0) setModuleId(mods[0].id);
-      else setModuleId("");
-    });
-  }, [subjectId]);
-
-  const currentModuleName = modules.find((m) => m.id === moduleId)?.name || (moduleId ? "Module" : "");
-  const validForm = moduleId && q.trim() && options.every((o) => o.trim()) && explanation.trim();
-
-  const handleSaveForm = async () => {
-    if (!validForm) return;
-    try {
-      await addQuestion({
-        subjectId,
-        moduleId,
-        moduleName: currentModuleName,
-        block,
-        difficulty,
-        q: q.trim(),
-        options: options.map((o) => o.trim()),
-        correct,
-        explanation: explanation.trim(),
-        status: publishImmediately ? "published" : "draft",
-      });
-      setQ("");
-      setOptions(["", "", "", ""]);
-      setExplanation("");
-      setCorrect(0);
-      setStatus("saved");
-      setTimeout(() => setStatus(null), 3000);
-    } catch {
-      setStatus("error");
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-2xl p-4" style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}` }}>
-        <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
-          Add MCQ — Direct Subject &gt; Module
-        </h2>
-        <p style={{ color: t.textMuted, fontSize: 13 }}>
-          Author questions directly under specific subject modules.
-        </p>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-12">
-        <Card t={t} className="flex flex-col gap-4 lg:col-span-4">
-          <div>
-            <span className="mb-2 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-              1. Select Subject
-            </span>
-            <select
-              value={subjectId}
-              onChange={(e) => setSubjectId(e.target.value as SubjectId)}
-              className="w-full rounded-xl px-3.5 py-2.5 text-sm font-semibold outline-none"
-              style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-            >
-              {SUBJECT_LIST.map((id) => (
-                <option key={id} value={id}>
-                  {SUBJECT_META[id].label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <span className="mb-2 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-              2. Select Module
-            </span>
-            {modules.length === 0 ? (
-              <div className="rounded-xl p-3 text-xs" style={{ backgroundColor: `${t.gold}18`, color: t.gold }}>
-                No modules assigned to {SUBJECT_META[subjectId].label}.
-              </div>
-            ) : (
-              <select
-                value={moduleId}
-                onChange={(e) => setModuleId(e.target.value)}
-                className="w-full rounded-xl px-3.5 py-2.5 text-sm outline-none"
-                style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-              >
-                {modules.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-                Block
-              </span>
-              <select
-                value={block}
-                onChange={(e) => setBlock(Number(e.target.value))}
-                className="w-full rounded-xl px-3 py-2 text-sm outline-none"
-                style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-              >
-                {Array.from({ length: TOTAL_BLOCKS }, (_, i) => i + 1).map((b) => (
-                  <option key={b} value={b}>
-                    Block {b}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-                Difficulty
-              </span>
-              <select
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value as Difficulty)}
-                className="w-full rounded-xl px-3 py-2 text-sm outline-none"
-                style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-              >
-                <option value="easy">Easy</option>
-                <option value="medium">Medium</option>
-                <option value="hard">Hard</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-2 flex items-center justify-between rounded-xl p-3 text-xs" style={{ backgroundColor: t.surfaceAlt }}>
-            <span style={{ color: t.textMuted }}>Publish immediately</span>
-            <input
-              type="checkbox"
-              checked={publishImmediately}
-              onChange={(e) => setPublishImmediately(e.target.checked)}
-              className="h-4 w-4 rounded accent-teal-500"
-            />
-          </div>
-        </Card>
-
-        <Card t={t} className="flex flex-col gap-4 lg:col-span-8">
-          <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-              Question Stem
-            </label>
-            <textarea
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Question text..."
-              rows={3}
-              className="w-full rounded-xl px-3.5 py-2.5 text-sm outline-none"
-              style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-              Options (Select correct with circle)
-            </label>
-            <div className="flex flex-col gap-2">
-              {options.map((opt, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCorrect(i)}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all"
-                    style={{
-                      border: `2px solid ${correct === i ? t.green : t.textFaint}`,
-                      backgroundColor: correct === i ? t.green : "transparent",
-                      color: correct === i ? "#fff" : t.textFaint,
-                    }}
-                  >
-                    {String.fromCharCode(65 + i)}
-                  </button>
-                  <input
-                    value={opt}
-                    onChange={(e) => setOptions(options.map((o, oi) => (oi === i ? e.target.value : o)))}
-                    placeholder={`Option ${String.fromCharCode(65 + i)}`}
-                    className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
-                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-              Explanation
-            </label>
-            <textarea
-              value={explanation}
-              onChange={(e) => setExplanation(e.target.value)}
-              placeholder="Clinical explanation..."
-              rows={3}
-              className="w-full rounded-xl px-3.5 py-2.5 text-sm outline-none"
-              style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-            />
-          </div>
-
-          <Btn t={t} full disabled={!validForm} onClick={handleSaveForm}>
-            Save MCQ ({publishImmediately ? "Published" : "Draft"})
-          </Btn>
-
-          {status === "saved" && (
-            <div className="flex items-center gap-2 rounded-xl p-3 text-xs font-bold" style={{ backgroundColor: `${t.green}18`, color: t.green }}>
-              <CheckCircle2 size={16} /> Question successfully saved!
-            </div>
-          )}
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-/* ========================================================================= */
-/* 4. SUBJECT MODULES ALLOCATOR TAB (37 MASTER MODULES)                     */
-/* ========================================================================= */
-function SubjectModulesTab({ t }: { t: ReturnType<typeof pickTheme> }) {
-  const [selectedSubject, setSelectedSubject] = useState<SubjectId>(SUBJECT_LIST[0]);
-  const [currentModules, setCurrentModules] = useState<ModuleDoc[]>([]);
-  const [searchMaster, setSearchMaster] = useState("");
-  const [customName, setCustomName] = useState("");
-  const [statusMsg, setStatusMsg] = useState("");
-
-  useEffect(() => {
-    return subscribeModules(selectedSubject, setCurrentModules);
-  }, [selectedSubject]);
-
-  const activeModuleNames = useMemo(() => {
-    return new Set(currentModules.map((m) => m.name.toLowerCase().trim()));
-  }, [currentModules]);
-
-  const toggleMasterModule = async (masterMod: (typeof MASTER_MODULES)[number]) => {
-    const isAssigned = activeModuleNames.has(masterMod.name.toLowerCase().trim());
-    let next: { id: string; name: string; order: number }[];
-
-    if (isAssigned) {
-      next = currentModules
-        .filter((m) => m.name.toLowerCase().trim() !== masterMod.name.toLowerCase().trim())
-        .map((m, idx) => ({ id: m.id, name: m.name, order: idx }));
-    } else {
-      next = [
-        ...currentModules.map((m, idx) => ({ id: m.id, name: m.name, order: idx })),
-        { id: `${selectedSubject}-${masterMod.id}`, name: masterMod.name, order: currentModules.length },
-      ];
-    }
-
-    setCurrentModules(next.map((n) => ({ ...n, subjectId: selectedSubject })));
-    await saveSubjectModules(selectedSubject, next);
-    setStatusMsg(`Updated modules for ${SUBJECT_META[selectedSubject].label}`);
-    setTimeout(() => setStatusMsg(""), 2500);
-  };
-
-  const handleAddCustomModule = async () => {
-    if (!customName.trim()) return;
-    const name = customName.trim();
-    if (activeModuleNames.has(name.toLowerCase())) return;
-
-    const next = [
-      ...currentModules.map((m, idx) => ({ id: m.id, name: m.name, order: idx })),
-      { id: `${selectedSubject}-${Date.now()}`, name, order: currentModules.length },
-    ];
-
-    setCurrentModules(next.map((n) => ({ ...n, subjectId: selectedSubject })));
-    await saveSubjectModules(selectedSubject, next);
-    setCustomName("");
-    setStatusMsg(`Added "${name}" to ${SUBJECT_META[selectedSubject].label}`);
-    setTimeout(() => setStatusMsg(""), 2500);
-  };
-
-  const handleRemoveModule = async (moduleId: string) => {
-    const next = currentModules
-      .filter((m) => m.id !== moduleId)
-      .map((m, idx) => ({ id: m.id, name: m.name, order: idx }));
-
-    setCurrentModules(next.map((n) => ({ ...n, subjectId: selectedSubject })));
-    await saveSubjectModules(selectedSubject, next);
-    setStatusMsg(`Module removed from ${SUBJECT_META[selectedSubject].label}`);
-    setTimeout(() => setStatusMsg(""), 2500);
-  };
-
-  const filteredMaster = MASTER_MODULES.filter(
-    (m) =>
-      m.name.toLowerCase().includes(searchMaster.toLowerCase()) ||
-      String(m.num).includes(searchMaster)
-  );
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-2xl p-4" style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}` }}>
-        <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
-          Subject Module Allocator (37 Master Modules)
-        </h2>
-        <p style={{ color: t.textMuted, fontSize: 13 }}>
-          Decide which modules belong to which MBBS subject.
-        </p>
-      </div>
-
-      {statusMsg && (
-        <div className="flex items-center gap-2 rounded-xl p-3 text-xs font-bold" style={{ backgroundColor: `${t.green}18`, color: t.green }}>
-          <CheckCircle2 size={16} /> {statusMsg}
-        </div>
-      )}
-
-      {/* Subject Selector Pills */}
-      <div className="flex flex-wrap gap-2">
-        {SUBJECT_LIST.map((id) => (
-          <Pill
-            key={id}
-            t={t}
-            tone="purple"
-            active={selectedSubject === id}
-            onClick={() => setSelectedSubject(id)}
-          >
-            {SUBJECT_META[id].label}
-          </Pill>
-        ))}
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-12">
-        <Card t={t} className="flex flex-col gap-3 lg:col-span-5">
-          <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: t.border }}>
-            <div>
-              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16 }}>
-                {SUBJECT_META[selectedSubject].label}
-              </span>
-              <p style={{ color: t.textFaint, fontSize: 12 }}>
-                {currentModules.length} Active Assigned Module{currentModules.length !== 1 ? "s" : ""}
-              </p>
-            </div>
-          </div>
-
-          {currentModules.length === 0 ? (
-            <p className="py-6 text-center text-xs" style={{ color: t.textFaint }}>
-              No modules assigned yet. Select from the 37 Master Modules on the right.
-            </p>
-          ) : (
-            <div className="flex max-h-[480px] flex-col gap-2 overflow-y-auto pr-1">
-              {currentModules.map((m, idx) => (
-                <div
-                  key={m.id}
-                  className="flex items-center justify-between rounded-xl p-2.5 text-xs transition-all"
-                  style={{ backgroundColor: t.surfaceAlt, border: `1px solid ${t.border}` }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold" style={{ backgroundColor: `${t.purple}30`, color: t.purple }}>
-                      {idx + 1}
-                    </span>
-                    <span className="font-semibold" style={{ color: t.text }}>
-                      {m.name}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveModule(m.id)}
-                    className="p-1 text-xs hover:opacity-80"
-                    style={{ color: t.red }}
-                    title="Remove module"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-2 border-t pt-3" style={{ borderColor: t.border }}>
-            <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-              Add Custom Module Name
-            </span>
-            <div className="flex gap-2">
-              <input
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                placeholder="Custom module title..."
-                className="flex-1 rounded-xl px-3 py-2 text-xs outline-none"
-                style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-              />
-              <Btn t={t} variant="secondary" disabled={!customName.trim()} onClick={handleAddCustomModule}>
-                <Plus size={14} /> Add
-              </Btn>
-            </div>
-          </div>
-        </Card>
-
-        <Card t={t} className="flex flex-col gap-3 lg:col-span-7">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2" style={{ borderColor: t.border }}>
-            <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16 }}>
-              Master Modules Catalog (1–37)
-            </span>
-            <input
-              value={searchMaster}
-              onChange={(e) => setSearchMaster(e.target.value)}
-              placeholder="Search 37 modules..."
-              className="rounded-xl px-3 py-1.5 text-xs outline-none"
-              style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-            />
-          </div>
-
-          <div className="grid max-h-[520px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
-            {filteredMaster.map((master) => {
-              const isAssigned = activeModuleNames.has(master.name.toLowerCase().trim());
-              return (
-                <div
-                  key={master.id}
-                  onClick={() => toggleMasterModule(master)}
-                  className="flex cursor-pointer items-center justify-between rounded-xl p-2.5 text-xs transition-all"
-                  style={{
-                    backgroundColor: isAssigned ? `${t.purple}20` : t.surfaceAlt,
-                    border: `1.5px solid ${isAssigned ? t.purple : t.border}`,
-                  }}
-                >
-                  <div className="min-w-0 flex-1 pr-2">
-                    <span className="mr-1.5 font-bold" style={{ color: isAssigned ? t.purple : t.textFaint }}>
-                      {master.num}.
-                    </span>
-                    <span className={isAssigned ? "font-bold text-white" : "text-gray-300"}>
-                      {master.name}
-                    </span>
-                  </div>
-                  <div
-                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-white transition-all"
-                    style={{ backgroundColor: isAssigned ? t.green : `${t.border}` }}
-                  >
-                    {isAssigned && <Check size={12} />}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-/* ========================================================================= */
-/* 5. BULK IMPORT TAB                                                       */
-/* ========================================================================= */
-function BulkImportTab({ t }: { t: ReturnType<typeof pickTheme> }) {
-  const [subjectId, setSubjectId] = useState<SubjectId>(SUBJECT_LIST[0]);
-  const [moduleId, setModuleId] = useState("");
-  const [block, setBlock] = useState(1);
-  const [difficulty, setDifficulty] = useState<Difficulty>("medium");
-  const [modules, setModules] = useState<ModuleDoc[]>([]);
-  const [importText, setImportText] = useState("");
-  const [importResults, setImportResults] = useState<ImportResult[] | null>(null);
-  const [existing, setExisting] = useState<FirestoreQuestion[]>([]);
-  const [committing, setCommitting] = useState(false);
-  const [committed, setCommitted] = useState(0);
-
-  useEffect(() => {
-    return subscribeModules(subjectId, (mods) => {
-      setModules(mods);
-      if (mods.length > 0) setModuleId(mods[0].id);
-      else setModuleId("");
-    });
-  }, [subjectId]);
-
-  useEffect(() => subscribeSubjectQuestions(subjectId, setExisting), [subjectId]);
-
-  const currentModuleName = modules.find((m) => m.id === moduleId)?.name || "General Block Topic";
-
-  const runImport = () => setImportResults(parseBracketFormat(importText, existing.map((e) => ({ q: e.q }))));
-
-  const commitImport = async () => {
-    if (!importResults) return;
-    const valid = importResults.filter((r) => r.status !== "error");
-    setCommitting(true);
-    try {
-      await bulkAddQuestions(
-        valid.map((r) => ({
-          subjectId,
-          moduleId: moduleId || `${subjectId}-block-${block}`,
-          moduleName: currentModuleName,
-          block,
-          difficulty,
-          q: r.q!,
-          options: r.options!,
-          correct: r.correct!,
-          explanation: "",
-          status: "published",
-        }))
-      );
-      setCommitted(valid.length);
-      setImportText("");
-      setImportResults(null);
-    } finally {
-      setCommitting(false);
-    }
-  };
-
-  return (
-    <div className="grid gap-5 md:grid-cols-2">
-      <Card t={t} className="flex flex-col gap-4">
-        <div>
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-            1. Target Subject
-          </span>
-          <select
-            value={subjectId}
-            onChange={(e) => setSubjectId(e.target.value as SubjectId)}
-            className="w-full rounded-xl px-3.5 py-2.5 text-sm font-semibold outline-none"
-            style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-          >
-            {SUBJECT_LIST.map((id) => (
-              <option key={id} value={id}>
-                {SUBJECT_META[id].label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-            2. Target Module
-          </span>
-          <select
-            value={moduleId}
-            onChange={(e) => setModuleId(e.target.value)}
-            className="w-full rounded-xl px-3.5 py-2.5 text-sm outline-none"
-            style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-          >
-            <option value="">(General / Block Topic)</option>
-            {modules.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-              Block (1–15)
-            </span>
-            <select
-              value={block}
-              onChange={(e) => setBlock(Number(e.target.value))}
-              className="w-full rounded-xl px-3 py-2 text-sm outline-none"
-              style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-            >
-              {Array.from({ length: TOTAL_BLOCKS }, (_, i) => i + 1).map((b) => (
-                <option key={b} value={b}>
-                  Block {b}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-              Difficulty
-            </span>
-            <select
-              value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value as Difficulty)}
-              className="w-full rounded-xl px-3 py-2 text-sm outline-none"
-              style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-            >
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </select>
-          </div>
-        </div>
-      </Card>
-
-      <div className="flex flex-col gap-4">
-        <Card t={t}>
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-            Bracket Format Syntax
-          </p>
-          <pre
-            className="rounded-xl p-3 text-xs"
-            style={{ fontFamily: FONT_MONO, backgroundColor: t.surfaceAlt, color: t.textMuted, whiteSpace: "pre-wrap" }}
-          >
-            {`[Question stem text ; Option A | Option B | *Option C | Option D]`}
-          </pre>
-          <textarea
-            value={importText}
-            onChange={(e) => setImportText(e.target.value)}
-            placeholder="Paste bulk batch of MCQs in bracket format..."
-            rows={7}
-            className="mt-3 w-full rounded-xl px-3.5 py-2.5 text-sm outline-none"
-            style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text, fontFamily: FONT_MONO }}
-          />
-          <div className="mt-3 flex gap-2">
-            <Btn t={t} onClick={runImport} disabled={!importText.trim()} icon={UploadCloud}>
-              Validate Format
-            </Btn>
-            {importResults && importResults.some((r) => r.status !== "error") && (
-              <Btn t={t} variant="secondary" disabled={committing} onClick={commitImport}>
-                {committing ? "Importing..." : `Import ${importResults.filter((r) => r.status !== "error").length} Questions`}
-              </Btn>
-            )}
-          </div>
-          {committed > 0 && (
-            <p className="mt-2 text-xs font-bold" style={{ color: t.green }}>
-              Successfully imported {committed} question{committed !== 1 ? "s" : ""} as published.
-            </p>
-          )}
-        </Card>
-
-        {importResults && (
-          <Card t={t}>
-            <p className="mb-3 text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
-              {importResults.filter((r) => r.status === "valid").length} valid &bull;{" "}
-              {importResults.filter((r) => r.status === "warning").length} warning &bull;{" "}
-              {importResults.filter((r) => r.status === "error").length} error
-            </p>
-            <div className="flex max-h-56 flex-col gap-2 overflow-y-auto">
-              {importResults.map((r) => (
-                <div key={r.line} className="flex items-start gap-2 rounded-xl p-2.5 text-xs" style={{ backgroundColor: t.surfaceAlt }}>
-                  {r.status === "valid" && <CheckCircle2 size={14} color={t.green} className="mt-0.5 shrink-0" />}
-                  {r.status === "warning" && <AlertTriangle size={14} color={t.gold} className="mt-0.5 shrink-0" />}
-                  {r.status === "error" && <XCircle size={14} color={t.red} className="mt-0.5 shrink-0" />}
-                  <div className="min-w-0">
-                    <span style={{ color: t.textFaint, fontFamily: FONT_MONO }}>Line {r.line}: </span>
-                    <span style={{ color: t.text }}>{r.message}</span>
-                    {r.q && <div className="mt-0.5 truncate text-gray-400">{r.q}</div>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ========================================================================= */
-/* 6. QUESTION BANK TAB                                                     */
-/* ========================================================================= */
-function QuestionBankTab({ t }: { t: ReturnType<typeof pickTheme> }) {
-  const [subjectId, setSubjectId] = useState<SubjectId | "all">("all");
-  const [blockFilter, setBlockFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [search, setSearch] = useState("");
-  const [allQuestions, setAllQuestions] = useState<FirestoreQuestion[]>([]);
-
-  useEffect(() => subscribeAllQuestions(setAllQuestions), []);
-
-  const filtered = allQuestions.filter((q) => {
-    if (subjectId !== "all" && q.subjectId !== subjectId) return false;
-    if (blockFilter !== "all" && q.block !== Number(blockFilter)) return false;
-    if (statusFilter !== "all" && q.status !== statusFilter) return false;
-    if (search && !q.q.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
-
-  return (
-    <div className="flex flex-col gap-3">
-      {/* Subject Filter Pills */}
-      <div className="flex flex-wrap gap-2">
-        <Pill key="all" t={t} tone="purple" active={subjectId === "all"} onClick={() => setSubjectId("all")}>
-          All Subjects ({allQuestions.length})
-        </Pill>
-        {SUBJECT_LIST.map((id) => (
-          <Pill key={id} t={t} tone="purple" active={subjectId === id} onClick={() => setSubjectId(id)}>
-            {SUBJECT_META[id].label}
-          </Pill>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <select
-          value={blockFilter}
-          onChange={(e) => setBlockFilter(e.target.value)}
-          className="rounded-xl px-3 py-2 text-xs"
-          style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-        >
-          <option value="all">All Blocks (1–15)</option>
-          {Array.from({ length: TOTAL_BLOCKS }, (_, i) => i + 1).map((b) => (
-            <option key={b} value={b}>
-              Block {b}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-xl px-3 py-2 text-xs"
-          style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
-        >
-          <option value="all">All Statuses</option>
-          <option value="draft">Draft</option>
-          <option value="published">Published</option>
-        </select>
-      </div>
-
-      <div className="flex items-center gap-2 rounded-2xl px-4 py-2.5" style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}` }}>
-        <Search size={15} color={t.textFaint} />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search question bank text..."
-          className="w-full bg-transparent text-sm outline-none"
-          style={{ color: t.text }}
-        />
-      </div>
-
-      <div className="flex items-center justify-between py-1 text-xs" style={{ color: t.textFaint }}>
-        <span>Showing {filtered.length} question{filtered.length !== 1 ? "s" : ""}</span>
-      </div>
-
-      {filtered.length === 0 && <p style={{ color: t.textFaint, fontSize: 13 }}>No questions match this filter.</p>}
-      {filtered.map((q) => (
-        <Card key={q.id} t={t} className="flex items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-              <Pill t={t} tone="purple">{SUBJECT_META[q.subjectId as SubjectId]?.label || q.subjectId}</Pill>
-              <Pill t={t} tone="muted">Block {q.block}</Pill>
-              <Pill t={t} tone="muted">{q.moduleName}</Pill>
-              <Pill t={t} tone={DIFF_TONE[q.difficulty]}>{q.difficulty}</Pill>
-              <Pill t={t} tone={q.status === "published" ? "green" : "gold"}>{q.status}</Pill>
-            </div>
-            <p className="text-sm font-bold">{q.q}</p>
-            <p className="mt-1 text-xs font-semibold" style={{ color: t.green }}>
-              Correct: {q.options[q.correct]}
-            </p>
-            {q.explanation && (
-              <p className="mt-1 text-xs text-gray-400">
-                <span className="font-semibold text-gray-300">Exp:</span> {q.explanation}
-              </p>
-            )}
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            <button
-              onClick={() => updateQuestionStatus(q.id, q.status === "draft" ? "published" : "draft")}
-              title="Toggle draft/published"
-              className="p-1"
-            >
-              {q.status === "published" ? <Eye size={16} color={t.green} /> : <EyeOff size={16} color={t.textFaint} />}
-            </button>
-            <button onClick={() => deleteQuestion(q.id)} className="p-1" title="Delete question">
-              <Trash2 size={16} color={t.red} />
-            </button>
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-/* ========================================================================= */
-/* 7. DASHBOARD TAB                                                         */
-/* ========================================================================= */
-function DashboardTab({ t }: { t: ReturnType<typeof pickTheme> }) {
-  const [all, setAll] = useState<FirestoreQuestion[]>([]);
-  useEffect(() => subscribeAllQuestions(setAll), []);
-
-  const stats = useMemo(() => {
-    const bySubject: Record<string, { published: number; draft: number }> = {};
-    SUBJECT_LIST.forEach((id) => (bySubject[id] = { published: 0, draft: 0 }));
-    all.forEach((q) => {
-      if (!bySubject[q.subjectId]) return;
-      bySubject[q.subjectId][q.status === "published" ? "published" : "draft"] += 1;
-    });
-    return bySubject;
-  }, [all]);
-
-  const totalPublished = Object.values(stats).reduce((acc, curr) => acc + curr.published, 0);
-  const totalDraft = Object.values(stats).reduce((acc, curr) => acc + curr.draft, 0);
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card t={t}>
-          <span style={{ fontSize: 12, color: t.textFaint }}>Total Questions</span>
-          <div style={{ fontFamily: FONT_MONO, fontSize: 28, fontWeight: 700, marginTop: 4 }}>
-            {totalPublished + totalDraft}
-          </div>
-        </Card>
-        <Card t={t}>
-          <span style={{ fontSize: 12, color: t.green }}>Published Questions</span>
-          <div style={{ fontFamily: FONT_MONO, fontSize: 28, fontWeight: 700, marginTop: 4, color: t.green }}>
-            {totalPublished}
-          </div>
-        </Card>
-        <Card t={t}>
-          <span style={{ fontSize: 12, color: t.gold }}>Drafts</span>
-          <div style={{ fontFamily: FONT_MONO, fontSize: 28, fontWeight: 700, marginTop: 4, color: t.gold }}>
-            {totalDraft}
-          </div>
-        </Card>
-      </div>
-
-      <div>
-        <h3 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, marginBottom: 12 }}>
-          12 MBBS Subjects Breakdown
-        </h3>
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {SUBJECT_LIST.map((id, i) => (
-            <Card key={id} t={t}>
-              <div className="mb-1 flex items-center justify-between">
-                <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14 }}>
-                  {SUBJECT_META[id].label}
-                </span>
-                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: t.chip[i % t.chip.length] }} />
-              </div>
-              <div style={{ fontFamily: FONT_MONO, fontSize: 22, fontWeight: 700 }}>
-                {stats[id]?.published || 0}
-              </div>
-              <span style={{ fontSize: 11, color: t.textFaint }}>
-                published &bull; {stats[id]?.draft || 0} draft
-              </span>
-            </Card>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ========================================================================= */
-/* MAIN ADMIN PANEL CONTAINER                                                */
-/* ========================================================================= */
 export default function AdminPanel() {
   const navigate = useNavigate();
-  const isDark = useAppStore((s) => s.isDark);
-  const isAdmin = useAppStore((s) => s.isAdmin);
-  const exitAdmin = useAppStore((s) => s.exitAdmin);
   const email = useAppStore((s) => s.email);
+  const exitAdmin = useAppStore((s) => s.exitAdmin);
+  const isDark = useAppStore((s) => s.isDark);
   const t = isDark ? THEME.dark : THEME.light;
-  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("mcq_block");
 
+  const [activeTab, setActiveTab] = useState<AdminTab>("add_mcq");
+
+  // Questions state for management
+  const [allQuestions, setAllQuestions] = useState<FirestoreQuestion[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(true);
+
+  // Subscribe to all questions
   useEffect(() => {
-    if (!isAdmin) navigate("/admin-gate");
-  }, [isAdmin, navigate]);
+    setLoadingQuestions(true);
+    const unsub = subscribeAllQuestions((qs) => {
+      setAllQuestions(qs);
+      setLoadingQuestions(false);
+    });
+    return () => unsub();
+  }, []);
 
-  if (!isAdmin) return null;
+  /* ------------------------------------------------------------------------- */
+  /* ADD MCQ STATE                                                             */
+  /* ------------------------------------------------------------------------- */
+  const [inputMode, setInputMode] = useState<"bracket" | "traditional">("bracket");
+  const [selectedBlock, setSelectedBlock] = useState<number>(1);
+  const [isCustomBlock, setIsCustomBlock] = useState(false);
+  const [customBlockInput, setCustomBlockInput] = useState("1");
+
+  const [selectedModulePreset, setSelectedModulePreset] = useState<string>(MASTER_MODULES[0]?.name || "Foundation-I");
+  const [isCustomModule, setIsCustomModule] = useState(false);
+  const [customModuleName, setCustomModuleName] = useState("");
+
+  const [subjectId, setSubjectId] = useState<SubjectId>("gross_anatomy");
+  const [difficulty, setDifficulty] = useState<Difficulty>("medium");
+  const [publishImmediately, setPublishImmediately] = useState(true);
+
+  // Bracket Mode State
+  const [bracketText, setBracketText] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"success" | "error" | null>(null);
+  const [savedCount, setSavedCount] = useState(0);
+
+  // Traditional Mode State
+  const [traditionalQ, setTraditionalQ] = useState("");
+  const [options, setOptions] = useState(["", "", "", ""]);
+  const [correctOptionIdx, setCorrectOptionIdx] = useState(0);
+  const [explanation, setExplanation] = useState("");
+
+  /* ------------------------------------------------------------------------- */
+  /* MANAGE MCQs FILTER STATE                                                  */
+  /* ------------------------------------------------------------------------- */
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterBlock, setFilterBlock] = useState<string>("all");
+  const [filterSubject, setFilterSubject] = useState<string>("all");
+  const [filterDifficulty, setFilterDifficulty] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  const effectiveBlock = isCustomBlock ? parseInt(customBlockInput, 10) || 1 : selectedBlock;
+  const effectiveModuleName = isCustomModule
+    ? customModuleName.trim() || "General Module"
+    : selectedModulePreset;
+  const effectiveModuleId = effectiveModuleName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+  // Real-time Bracket Parse
+  const parsedBracketResults = useMemo(() => {
+    if (!bracketText.trim()) return [];
+    return parseBracketFormat(bracketText, allQuestions);
+  }, [bracketText, allQuestions]);
+
+  const validParsedMCQs = useMemo(() => {
+    return parsedBracketResults.filter((p) => p.status !== "error" && p.q && p.options && p.correct !== undefined);
+  }, [parsedBracketResults]);
+
+  const errorParsedMCQs = useMemo(() => {
+    return parsedBracketResults.filter((p) => p.status === "error");
+  }, [parsedBracketResults]);
+
+  // Handle Save Bracket MCQs
+  const handleSaveBracket = async () => {
+    if (validParsedMCQs.length === 0) return;
+    try {
+      const itemsToSave = validParsedMCQs.map((v) => ({
+        subjectId,
+        moduleId: effectiveModuleId,
+        moduleName: effectiveModuleName,
+        block: effectiveBlock,
+        difficulty,
+        q: v.q!,
+        options: v.options!,
+        correct: v.correct!,
+        explanation: v.explanation || "High-yield MBBS concept explanation.",
+        status: (publishImmediately ? "published" : "draft") as QuestionStatus,
+      }));
+
+      await bulkAddQuestions(itemsToSave);
+      setSavedCount(itemsToSave.length);
+      setSaveStatus("success");
+      setBracketText("");
+      setTimeout(() => setSaveStatus(null), 4000);
+    } catch {
+      setSaveStatus("error");
+      setTimeout(() => setSaveStatus(null), 4000);
+    }
+  };
+
+  // Handle Save Traditional MCQ
+  const isTraditionalValid =
+    traditionalQ.trim() &&
+    options.every((o) => o.trim()) &&
+    explanation.trim() &&
+    correctOptionIdx >= 0 &&
+    correctOptionIdx < options.length;
+
+  const handleSaveTraditional = async (addAnother = false) => {
+    if (!isTraditionalValid) return;
+    try {
+      await addQuestion({
+        subjectId,
+        moduleId: effectiveModuleId,
+        moduleName: effectiveModuleName,
+        block: effectiveBlock,
+        difficulty,
+        q: traditionalQ.trim(),
+        options: options.map((o) => o.trim()),
+        correct: correctOptionIdx,
+        explanation: explanation.trim(),
+        status: (publishImmediately ? "published" : "draft") as QuestionStatus,
+      });
+
+      setSavedCount(1);
+      setSaveStatus("success");
+      setTimeout(() => setSaveStatus(null), 3000);
+
+      if (addAnother) {
+        setTraditionalQ("");
+        setOptions(["", "", "", ""]);
+        setExplanation("");
+        setCorrectOptionIdx(0);
+      } else {
+        setTraditionalQ("");
+        setOptions(["", "", "", ""]);
+        setExplanation("");
+        setCorrectOptionIdx(0);
+      }
+    } catch {
+      setSaveStatus("error");
+      setTimeout(() => setSaveStatus(null), 3000);
+    }
+  };
+
+  // Delete question handler
+  const handleDeleteQuestion = async (qItem: FirestoreQuestion) => {
+    try {
+      await deleteQuestion(qItem.id, qItem.q);
+      setDeleteConfirmId(null);
+      setActionNotice(`Removed MCQ: "${qItem.q.slice(0, 35)}..."`);
+      setTimeout(() => setActionNotice(null), 3500);
+    } catch {
+      setActionNotice("Failed to delete question.");
+      setTimeout(() => setActionNotice(null), 3000);
+    }
+  };
+
+  // Toggle status handler
+  const handleToggleStatus = async (qItem: FirestoreQuestion) => {
+    const nextStatus: QuestionStatus = qItem.status === "published" ? "draft" : "published";
+    try {
+      await updateQuestionStatus(qItem.id, nextStatus);
+      setActionNotice(`Question status set to ${nextStatus}.`);
+      setTimeout(() => setActionNotice(null), 2500);
+    } catch {
+      setActionNotice("Failed to update status.");
+      setTimeout(() => setActionNotice(null), 2500);
+    }
+  };
+
+  // Filtered Questions for Management View
+  const filteredQuestions = useMemo(() => {
+    return allQuestions.filter((q) => {
+      if (filterBlock !== "all" && q.block !== Number(filterBlock)) return false;
+      if (filterSubject !== "all" && q.subjectId !== filterSubject) return false;
+      if (filterDifficulty !== "all" && q.difficulty !== filterDifficulty) return false;
+      if (filterStatus !== "all" && q.status !== filterStatus) return false;
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const inQ = q.q.toLowerCase().includes(query);
+        const inOpts = q.options.some((o) => o.toLowerCase().includes(query));
+        const inExp = q.explanation?.toLowerCase().includes(query);
+        const inMod = q.moduleName?.toLowerCase().includes(query);
+        if (!inQ && !inOpts && !inExp && !inMod) return false;
+      }
+      return true;
+    });
+  }, [allQuestions, filterBlock, filterSubject, filterDifficulty, filterStatus, searchQuery]);
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-col gap-6 max-w-5xl mx-auto pb-16">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-5" style={{ borderColor: t.border }}>
         <div>
           <div className="flex items-center gap-2">
-            <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24 }}>Admin Panel</h1>
-            <span className="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style={{ backgroundColor: `${t.purple}25`, color: t.purple }}>
-              {email ? `Staff: ${email}` : "Admin Access"}
+            <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26 }}>Admin Panel</h1>
+            <span
+              className="rounded-full px-2.5 py-0.5 text-xs font-bold"
+              style={{ backgroundColor: `${t.purple}25`, color: isDark ? "#c4b5fd" : t.purpleStrong }}
+            >
+              {email ? `Staff: ${email}` : "Editor Mode"}
             </span>
           </div>
-          <p style={{ color: t.textMuted, fontSize: 13 }}>
-            MBBS modular curriculum manager &bull; Blocks 1–15 &bull; 12 Subjects &bull; 37 Modules.
+          <p style={{ color: t.textMuted, fontSize: 13.5, marginTop: 3 }}>
+            Add and manage medical MCQs across any block, module, and subject.
           </p>
         </div>
+
         <div className="flex items-center gap-2">
           <Btn t={t} variant="ghost" onClick={() => navigate("/subjects")}>
             Student View
@@ -1647,30 +291,773 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
-        {TABS.map((tb) => (
-          <button
-            key={tb.id}
-            onClick={() => setTab(tb.id)}
-            className="flex shrink-0 items-center gap-1.5 rounded-2xl px-4 py-2 text-xs font-bold transition-all"
-            style={{
-              backgroundColor: tab === tb.id ? t.purpleStrong : t.surfaceAlt,
-              color: tab === tb.id ? "#fff" : t.textMuted,
-              border: `1.5px solid ${tab === tb.id ? t.purpleStrong : t.border}`,
-            }}
-          >
-            <tb.icon size={14} /> {tb.label}
-          </button>
-        ))}
+      {/* Main Tab Switcher */}
+      <div
+        className="flex rounded-2xl p-1.5 self-start"
+        style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}` }}
+      >
+        {ADMIN_TABS.map((tab) => {
+          const active = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition-all"
+              style={{
+                backgroundColor: active ? t.purpleStrong : "transparent",
+                color: active ? "#fff" : t.textMuted,
+                boxShadow: active ? `0 2px 8px ${t.purpleStrong}55` : "none",
+              }}
+            >
+              <tab.icon size={16} />
+              {tab.label}
+              {tab.id === "manage_mcq" && (
+                <span
+                  className="rounded-full px-2 py-0.2 text-[11px] font-mono font-bold"
+                  style={{ backgroundColor: active ? "rgba(255,255,255,0.25)" : t.surface, color: active ? "#fff" : t.teal }}
+                >
+                  {allQuestions.length}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {tab === "dashboard" && <DashboardTab t={t} />}
-      {tab === "mcq_block" && <McqBlockWiseTab t={t} />}
-      {tab === "block_config" && <BlockCurriculumConfigTab t={t} />}
-      {tab === "mcq_module" && <McqModuleWiseTab t={t} />}
-      {tab === "subject_modules" && <SubjectModulesTab t={t} />}
-      {tab === "import" && <BulkImportTab t={t} />}
-      {tab === "bank" && <QuestionBankTab t={t} />}
+      {/* Action Notification Toast */}
+      {actionNotice && (
+        <div
+          className="flex items-center justify-between rounded-xl px-4 py-3 text-sm font-bold transition-all shadow-md"
+          style={{ backgroundColor: `${t.teal}22`, border: `1.5px solid ${t.teal}`, color: t.teal }}
+        >
+          <span>{actionNotice}</span>
+          <button onClick={() => setActionNotice(null)} className="text-xs opacity-75 hover:opacity-100">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* TAB 1: ADD MCQS (BRACKET MODE + TRADITIONAL FORM)                     */}
+      {/* ===================================================================== */}
+      {activeTab === "add_mcq" && (
+        <div className="flex flex-col gap-6">
+          {/* Target Classification Card (Block, Module, Subject, Difficulty) */}
+          <Card t={t} style={{ backgroundColor: t.surface, border: `1.5px solid ${t.border}` }}>
+            <div className="flex items-center justify-between border-b pb-3 mb-4" style={{ borderColor: t.border }}>
+              <div className="flex items-center gap-2">
+                <Layers size={17} color={t.purple} />
+                <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16 }}>
+                  Target Assignment (Combine Any Block with Any Module)
+                </span>
+              </div>
+              <span className="text-xs" style={{ color: t.textFaint }}>
+                Questions will be dynamically assigned to this Block &amp; Module
+              </span>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {/* 1. Block Selector */}
+              <div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                  Target Block
+                </label>
+                {!isCustomBlock ? (
+                  <select
+                    value={selectedBlock}
+                    onChange={(e) => setSelectedBlock(Number(e.target.value))}
+                    className="w-full rounded-xl px-3 py-2.5 text-sm font-semibold outline-none"
+                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                  >
+                    {Array.from({ length: TOTAL_BLOCKS }, (_, i) => i + 1).map((b) => (
+                      <option key={b} value={b} style={{ backgroundColor: t.surface, color: t.text }}>
+                        Block {b}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={customBlockInput}
+                    onChange={(e) => setCustomBlockInput(e.target.value)}
+                    placeholder="Enter Block #"
+                    className="w-full rounded-xl px-3 py-2 text-sm font-semibold outline-none"
+                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                  />
+                )}
+                <button
+                  onClick={() => setIsCustomBlock(!isCustomBlock)}
+                  className="mt-1 text-[11px] font-bold underline"
+                  style={{ color: t.teal }}
+                >
+                  {isCustomBlock ? "Choose from standard 1–15" : "+ Custom Block #"}
+                </button>
+              </div>
+
+              {/* 2. Module Selector */}
+              <div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                  Target Module
+                </label>
+                {!isCustomModule ? (
+                  <select
+                    value={selectedModulePreset}
+                    onChange={(e) => setSelectedModulePreset(e.target.value)}
+                    className="w-full rounded-xl px-3 py-2.5 text-sm font-semibold outline-none"
+                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                  >
+                    {MASTER_MODULES.map((m) => (
+                      <option key={m.id} value={m.name} style={{ backgroundColor: t.surface, color: t.text }}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={customModuleName}
+                    onChange={(e) => setCustomModuleName(e.target.value)}
+                    placeholder="e.g. Cardiovascular-I or Clinical Oncology"
+                    className="w-full rounded-xl px-3 py-2 text-sm font-semibold outline-none"
+                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                  />
+                )}
+                <button
+                  onClick={() => setIsCustomModule(!isCustomModule)}
+                  className="mt-1 text-[11px] font-bold underline"
+                  style={{ color: t.teal }}
+                >
+                  {isCustomModule ? "Choose from standard modules" : "+ Type Custom Module Name"}
+                </button>
+              </div>
+
+              {/* 3. Subject Selector */}
+              <div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                  Discipline / Subject
+                </label>
+                <select
+                  value={subjectId}
+                  onChange={(e) => setSubjectId(e.target.value as SubjectId)}
+                  className="w-full rounded-xl px-3 py-2.5 text-sm font-semibold outline-none"
+                  style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                >
+                  {SUBJECT_LIST.map((s) => (
+                    <option key={s} value={s} style={{ backgroundColor: t.surface, color: t.text }}>
+                      {SUBJECT_META[s].label}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-[11px]" style={{ color: t.textFaint }}>
+                  {SUBJECT_META[subjectId]?.defaultYear}
+                </span>
+              </div>
+
+              {/* 4. Difficulty & Publish Toggle */}
+              <div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                  Difficulty
+                </label>
+                <div className="flex gap-1.5">
+                  {(["easy", "medium", "hard"] as Difficulty[]).map((d) => {
+                    const sel = difficulty === d;
+                    return (
+                      <button
+                        key={d}
+                        onClick={() => setDifficulty(d)}
+                        className="flex-1 rounded-xl py-2 text-xs font-bold capitalize transition-all"
+                        style={{
+                          backgroundColor: sel ? t.purpleStrong : t.surfaceAlt,
+                          color: sel ? "#fff" : t.textMuted,
+                          border: `1.5px solid ${sel ? t.purpleStrong : t.border}`,
+                        }}
+                      >
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
+                <label className="mt-2 flex items-center gap-2 text-xs font-bold cursor-pointer" style={{ color: t.textMuted }}>
+                  <input
+                    type="checkbox"
+                    checked={publishImmediately}
+                    onChange={(e) => setPublishImmediately(e.target.checked)}
+                    className="accent-purple-500 rounded"
+                  />
+                  Publish immediately (Live)
+                </label>
+              </div>
+            </div>
+
+            {/* Target Summary Pill */}
+            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl p-3 text-xs" style={{ backgroundColor: t.surfaceAlt }}>
+              <span className="font-bold" style={{ color: t.textMuted }}>Adding to:</span>
+              <Pill t={t} tone="teal">Block {effectiveBlock}</Pill>
+              <Pill t={t} tone="purple">{effectiveModuleName}</Pill>
+              <Pill t={t} tone="gold">{SUBJECT_META[subjectId].label}</Pill>
+              <Pill t={t} tone={DIFF_TONE[difficulty] as any}>{difficulty}</Pill>
+            </div>
+          </Card>
+
+          {/* Mode Switcher: Bracket Mode vs Traditional Form */}
+          <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: t.border }}>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setInputMode("bracket")}
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all"
+                style={{
+                  backgroundColor: inputMode === "bracket" ? t.purpleStrong : t.surfaceAlt,
+                  color: inputMode === "bracket" ? "#fff" : t.textMuted,
+                  border: `1.5px solid ${inputMode === "bracket" ? t.purpleStrong : t.border}`,
+                }}
+              >
+                <Sparkles size={14} /> Bracket Mode (Live Preview)
+              </button>
+              <button
+                onClick={() => setInputMode("traditional")}
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all"
+                style={{
+                  backgroundColor: inputMode === "traditional" ? t.purpleStrong : t.surfaceAlt,
+                  color: inputMode === "traditional" ? "#fff" : t.textMuted,
+                  border: `1.5px solid ${inputMode === "traditional" ? t.purpleStrong : t.border}`,
+                }}
+              >
+                <BookOpen size={14} /> Traditional Form Mode
+              </button>
+            </div>
+
+            {inputMode === "bracket" && (
+              <button
+                onClick={() => setBracketText(SAMPLE_BRACKET_TEMPLATE)}
+                className="text-xs font-bold underline transition-colors"
+                style={{ color: t.teal }}
+              >
+                Insert Sample Template
+              </button>
+            )}
+          </div>
+
+          {/* Status Message */}
+          {saveStatus === "success" && (
+            <div
+              className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold shadow-sm"
+              style={{ backgroundColor: `${t.green}20`, border: `1.5px solid ${t.green}`, color: t.green }}
+            >
+              <CheckCircle2 size={18} />
+              <span>Successfully saved {savedCount} MCQ{savedCount !== 1 ? "s" : ""} to Block {effectiveBlock} &bull; {effectiveModuleName}!</span>
+            </div>
+          )}
+
+          {saveStatus === "error" && (
+            <div
+              className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold shadow-sm"
+              style={{ backgroundColor: `${t.red}20`, border: `1.5px solid ${t.red}`, color: t.red }}
+            >
+              <XCircle size={18} />
+              <span>Failed to save MCQs. Please check the format and try again.</span>
+            </div>
+          )}
+
+          {/* ----------------------------------------------------------------- */}
+          {/* SUB-TAB A: BRACKET MODE (WITH LIVE INTERACTIVE PREVIEW)            */}
+          {/* ----------------------------------------------------------------- */}
+          {inputMode === "bracket" && (
+            <div className="grid gap-6 lg:grid-cols-2 items-start">
+              {/* Left Column: Textarea & Guide */}
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                    Raw Bracket Input
+                  </label>
+                  <span className="text-[11px]" style={{ color: t.textMuted }}>
+                    Format: <code>[Question ; Opt A | Opt B | *Opt C | Opt D ; Explanation]</code>
+                  </span>
+                </div>
+
+                <textarea
+                  value={bracketText}
+                  onChange={(e) => setBracketText(e.target.value)}
+                  rows={14}
+                  placeholder={`Type or paste your MCQs here...\n\nExample:\n[What is the major extracellular cation? ; Sodium* | Potassium | Calcium | Magnesium ; Sodium (Na+) is the principal cation of the extracellular fluid.]`}
+                  className="w-full rounded-2xl p-4 text-xs font-mono outline-none resize-y leading-relaxed"
+                  style={{
+                    backgroundColor: t.surfaceAlt,
+                    border: `1.5px solid ${t.border}`,
+                    color: t.text,
+                    minHeight: "320px",
+                  }}
+                />
+
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-mono" style={{ color: t.textMuted }}>
+                    Parsed: <strong style={{ color: validParsedMCQs.length > 0 ? t.green : t.textFaint }}>{validParsedMCQs.length} valid</strong>
+                    {errorParsedMCQs.length > 0 && <span style={{ color: t.red }}> ({errorParsedMCQs.length} errors)</span>}
+                  </span>
+
+                  <Btn
+                    t={t}
+                    icon={Plus}
+                    disabled={validParsedMCQs.length === 0}
+                    onClick={handleSaveBracket}
+                  >
+                    Save &amp; {publishImmediately ? "Publish" : "Draft"} ({validParsedMCQs.length} MCQs)
+                  </Btn>
+                </div>
+              </div>
+
+              {/* Right Column: Live Interactive Preview */}
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                    Live Preview ({parsedBracketResults.length} Detected)
+                  </label>
+                  <span className="text-[11px]" style={{ color: t.teal }}>
+                    Updates in real-time
+                  </span>
+                </div>
+
+                <div
+                  className="flex flex-col gap-4 rounded-2xl p-4 max-h-[500px] overflow-y-auto"
+                  style={{ backgroundColor: t.surface, border: `1.5px solid ${t.border}` }}
+                >
+                  {parsedBracketResults.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center gap-2" style={{ color: t.textFaint }}>
+                      <HelpCircle size={32} />
+                      <p className="text-sm">Type bracket MCQs on the left to see the live preview rendered here.</p>
+                      <button
+                        onClick={() => setBracketText(SAMPLE_BRACKET_TEMPLATE)}
+                        className="text-xs font-bold underline"
+                        style={{ color: t.purple }}
+                      >
+                        Click here to load 3 sample questions
+                      </button>
+                    </div>
+                  ) : (
+                    parsedBracketResults.map((item, idx) => {
+                      if (item.status === "error") {
+                        return (
+                          <div
+                            key={idx}
+                            className="rounded-xl p-3 text-xs"
+                            style={{ backgroundColor: `${t.red}15`, border: `1px solid ${t.red}`, color: t.red }}
+                          >
+                            <div className="flex items-center gap-1.5 font-bold mb-1">
+                              <AlertTriangle size={14} /> MCQ #{item.line}: Parse Error
+                            </div>
+                            <p>{item.message}</p>
+                            <div className="mt-1 font-mono text-[10px] opacity-75 truncate">{item.raw}</div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={idx}
+                          className="rounded-xl p-4 flex flex-col gap-2.5 transition-all"
+                          style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}` }}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ backgroundColor: `${t.teal}22`, color: t.teal }}>
+                              MCQ #{idx + 1} &bull; Ready
+                            </span>
+                            <Pill t={t} tone={DIFF_TONE[difficulty] as any}>{difficulty}</Pill>
+                          </div>
+
+                          <h4 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14.5 }}>
+                            {item.q}
+                          </h4>
+
+                          {/* Options List */}
+                          <div className="grid gap-1.5 sm:grid-cols-2">
+                            {item.options?.map((opt, optIdx) => {
+                              const isCorrect = optIdx === item.correct;
+                              const letter = String.fromCharCode(65 + optIdx);
+                              return (
+                                <div
+                                  key={optIdx}
+                                  className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+                                  style={{
+                                    backgroundColor: isCorrect ? `${t.green}25` : t.surface,
+                                    border: `1.5px solid ${isCorrect ? t.green : t.border}`,
+                                    color: isCorrect ? t.green : t.text,
+                                  }}
+                                >
+                                  <span className="font-mono text-[10px] font-bold">{letter}.</span>
+                                  <span className="flex-1">{opt}</span>
+                                  {isCorrect && <Check size={13} color={t.green} />}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Explanation */}
+                          {item.explanation && (
+                            <div className="rounded-lg p-2.5 text-xs" style={{ backgroundColor: `${t.purple}15`, border: `1px solid ${t.purple}44` }}>
+                              <span className="font-bold block mb-0.5" style={{ color: isDark ? "#c4b5fd" : t.purpleStrong }}>
+                                Rationale:
+                              </span>
+                              <p style={{ color: t.textMuted }}>{item.explanation}</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ----------------------------------------------------------------- */}
+          {/* SUB-TAB B: TRADITIONAL FORM MODE                                   */}
+          {/* ----------------------------------------------------------------- */}
+          {inputMode === "traditional" && (
+            <Card t={t} style={{ backgroundColor: t.surface, border: `1.5px solid ${t.border}` }}>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                    Question Prompt / Clinical Stem
+                  </label>
+                  <textarea
+                    value={traditionalQ}
+                    onChange={(e) => setTraditionalQ(e.target.value)}
+                    rows={3}
+                    placeholder="Enter the complete question text..."
+                    className="w-full rounded-xl p-3 text-sm outline-none resize-y"
+                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                    Options (Select the Radio for the Correct Answer)
+                  </label>
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    {options.map((opt, i) => {
+                      const letter = String.fromCharCode(65 + i);
+                      const isCorrect = correctOptionIdx === i;
+                      return (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 rounded-xl p-2.5 transition-all"
+                          style={{
+                            backgroundColor: isCorrect ? `${t.green}18` : t.surfaceAlt,
+                            border: `1.5px solid ${isCorrect ? t.green : t.border}`,
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="correctOption"
+                            checked={isCorrect}
+                            onChange={() => setCorrectOptionIdx(i)}
+                            className="accent-emerald-500 h-4 w-4 cursor-pointer"
+                          />
+                          <span className="font-mono text-xs font-bold">{letter}.</span>
+                          <input
+                            type="text"
+                            value={opt}
+                            onChange={(e) => {
+                              const next = [...options];
+                              next[i] = e.target.value;
+                              setOptions(next);
+                            }}
+                            placeholder={`Option ${letter}`}
+                            className="w-full bg-transparent text-xs font-medium outline-none"
+                            style={{ color: t.text }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                    Clinical Explanation &amp; Rationale
+                  </label>
+                  <textarea
+                    value={explanation}
+                    onChange={(e) => setExplanation(e.target.value)}
+                    rows={2}
+                    placeholder="Explain why the correct answer is right and why distractors are wrong..."
+                    className="w-full rounded-xl p-3 text-sm outline-none resize-y"
+                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+                  <Btn
+                    t={t}
+                    variant="ghost"
+                    disabled={!isTraditionalValid}
+                    onClick={() => handleSaveTraditional(true)}
+                  >
+                    Save &amp; Add Another
+                  </Btn>
+                  <Btn
+                    t={t}
+                    disabled={!isTraditionalValid}
+                    onClick={() => handleSaveTraditional(false)}
+                  >
+                    Save MCQ
+                  </Btn>
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* TAB 2: MANAGE ALL MCQS & QUESTION BANK (REQUEST 2)                     */}
+      {/* ===================================================================== */}
+      {activeTab === "manage_mcq" && (
+        <div className="flex flex-col gap-6">
+          {/* Controls Bar & Filters */}
+          <Card t={t} style={{ backgroundColor: t.surface, border: `1.5px solid ${t.border}` }}>
+            <div className="flex flex-col gap-4">
+              {/* Search input */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search question text, options, module, or explanation..."
+                  className="w-full rounded-2xl pl-10 pr-4 py-3 text-sm outline-none"
+                  style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                />
+                <Search size={17} className="absolute left-3.5 top-3.5" color={t.textFaint} />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-3 text-xs opacity-60 hover:opacity-100"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Filter Row */}
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+                {/* Block Filter */}
+                <div>
+                  <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                    Block
+                  </label>
+                  <select
+                    value={filterBlock}
+                    onChange={(e) => setFilterBlock(e.target.value)}
+                    className="w-full rounded-xl px-2.5 py-2 text-xs font-semibold outline-none"
+                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                  >
+                    <option value="all">All Blocks (1–15)</option>
+                    {Array.from({ length: TOTAL_BLOCKS }, (_, i) => i + 1).map((b) => (
+                      <option key={b} value={b}>Block {b}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Subject Filter */}
+                <div>
+                  <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                    Subject
+                  </label>
+                  <select
+                    value={filterSubject}
+                    onChange={(e) => setFilterSubject(e.target.value)}
+                    className="w-full rounded-xl px-2.5 py-2 text-xs font-semibold outline-none"
+                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                  >
+                    <option value="all">All Subjects</option>
+                    {SUBJECT_LIST.map((s) => (
+                      <option key={s} value={s}>{SUBJECT_META[s].label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Difficulty Filter */}
+                <div>
+                  <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                    Difficulty
+                  </label>
+                  <select
+                    value={filterDifficulty}
+                    onChange={(e) => setFilterDifficulty(e.target.value)}
+                    className="w-full rounded-xl px-2.5 py-2 text-xs font-semibold outline-none"
+                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                  >
+                    <option value="all">All Difficulties</option>
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </div>
+
+                {/* Status Filter */}
+                <div>
+                  <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider" style={{ color: t.textFaint }}>
+                    Status
+                  </label>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="w-full rounded-xl px-2.5 py-2 text-xs font-semibold outline-none"
+                    style={{ backgroundColor: t.surfaceAlt, border: `1.5px solid ${t.border}`, color: t.text }}
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="published">Published</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Results Summary Bar */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold" style={{ color: t.textMuted }}>
+              Showing {filteredQuestions.length} of {allQuestions.length} Total MCQs
+            </span>
+            {(filterBlock !== "all" || filterSubject !== "all" || filterDifficulty !== "all" || filterStatus !== "all" || searchQuery) && (
+              <button
+                onClick={() => {
+                  setFilterBlock("all");
+                  setFilterSubject("all");
+                  setFilterDifficulty("all");
+                  setFilterStatus("all");
+                  setSearchQuery("");
+                }}
+                className="text-xs font-bold underline"
+                style={{ color: t.teal }}
+              >
+                Reset All Filters
+              </button>
+            )}
+          </div>
+
+          {/* Questions List */}
+          {loadingQuestions ? (
+            <div className="py-16 text-center text-sm font-semibold" style={{ color: t.textMuted }}>
+              Loading question bank...
+            </div>
+          ) : filteredQuestions.length === 0 ? (
+            <div className="rounded-2xl p-12 text-center flex flex-col items-center gap-3" style={{ backgroundColor: t.surface, border: `1.5px solid ${t.border}` }}>
+              <Search size={32} color={t.textFaint} />
+              <p style={{ color: t.textMuted, fontSize: 15 }}>No questions matched your current filters.</p>
+              <Btn t={t} variant="ghost" onClick={() => setActiveTab("add_mcq")}>
+                Add New Questions
+              </Btn>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {filteredQuestions.map((qItem, idx) => {
+                const subjectMeta = SUBJECT_META[qItem.subjectId as keyof typeof SUBJECT_META];
+                const isDeletePrompt = deleteConfirmId === qItem.id;
+
+                return (
+                  <div
+                    key={qItem.id || idx}
+                    className="rounded-2xl p-5 transition-all flex flex-col gap-3 relative"
+                    style={{ backgroundColor: t.surface, border: `1.5px solid ${t.border}` }}
+                  >
+                    {/* Top Meta Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3" style={{ borderColor: t.border }}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Pill t={t} tone="teal">Block {qItem.block}</Pill>
+                        <Pill t={t} tone="purple">{qItem.moduleName || "General"}</Pill>
+                        <Pill t={t} tone="gold">{subjectMeta?.label || qItem.subjectId}</Pill>
+                        <Pill t={t} tone={DIFF_TONE[qItem.difficulty] as any}>{qItem.difficulty}</Pill>
+                        <button
+                          onClick={() => handleToggleStatus(qItem)}
+                          className="flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold transition-all"
+                          style={{
+                            backgroundColor: qItem.status === "published" ? `${t.green}20` : `${t.gold}20`,
+                            color: qItem.status === "published" ? t.green : t.gold,
+                          }}
+                          title="Click to toggle status"
+                        >
+                          {qItem.status === "published" ? <Eye size={12} /> : <EyeOff size={12} />}
+                          {qItem.status === "published" ? "Published" : "Draft"}
+                        </button>
+                      </div>
+
+                      {/* Actions: Delete with confirmation */}
+                      <div>
+                        {!isDeletePrompt ? (
+                          <button
+                            onClick={() => setDeleteConfirmId(qItem.id)}
+                            className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition-all text-red-400 hover:bg-red-500/10"
+                            title="Delete this question"
+                          >
+                            <Trash2 size={14} /> Remove
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-red-400">Confirm delete?</span>
+                            <button
+                              onClick={() => handleDeleteQuestion(qItem)}
+                              className="rounded-lg px-2.5 py-1 text-xs font-extrabold bg-red-600 text-white hover:bg-red-700"
+                            >
+                              Yes, Delete
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirmId(null)}
+                              className="rounded-lg px-2 py-1 text-xs font-bold opacity-75 hover:opacity-100"
+                              style={{ color: t.textMuted }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Question Stem */}
+                    <h3 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16, lineHeight: 1.4 }}>
+                      {qItem.q}
+                    </h3>
+
+                    {/* Options Grid */}
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {qItem.options.map((opt, optIdx) => {
+                        const isCorrect = optIdx === qItem.correct;
+                        const letter = String.fromCharCode(65 + optIdx);
+                        return (
+                          <div
+                            key={optIdx}
+                            className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold"
+                            style={{
+                              backgroundColor: isCorrect ? `${t.green}20` : t.surfaceAlt,
+                              border: `1.5px solid ${isCorrect ? t.green : t.border}`,
+                              color: isCorrect ? t.green : t.text,
+                            }}
+                          >
+                            <span className="font-mono text-[11px] font-bold">{letter}.</span>
+                            <span className="flex-1">{opt}</span>
+                            {isCorrect && <Check size={14} color={t.green} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Explanation */}
+                    {qItem.explanation && (
+                      <div className="rounded-xl p-3 text-xs" style={{ backgroundColor: `${t.purple}12`, border: `1px solid ${t.purple}33` }}>
+                        <span className="font-bold block mb-1" style={{ color: isDark ? "#c4b5fd" : t.purpleStrong }}>
+                          Rationale &amp; High-Yield Concept:
+                        </span>
+                        <p style={{ color: t.textMuted, lineHeight: 1.5 }}>{qItem.explanation}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

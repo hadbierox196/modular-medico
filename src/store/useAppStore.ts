@@ -49,7 +49,7 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      isDark: true,
+      isDark: false,
       toggleDark: () => set((s) => ({ isDark: !s.isDark })),
 
       uid: null,

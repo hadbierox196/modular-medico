@@ -2,30 +2,19 @@ import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
+import appletConfig from "../firebase-applet-config.json";
 
 // Your web app's Firebase configuration.
-// NOTE: these are public client identifiers (not secrets) — it's normal and expected
-// for them to live in frontend code / the built JS bundle. Access control is enforced
-// by Firestore security rules (see firestore.rules) and by Cloud Functions, not by
-// hiding this object. They're still pulled from env vars (rather than hardcoded) so
-// each environment (local/staging/prod) can point at its own Firebase project.
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || appletConfig.apiKey || "AIzaSyC0aQvNi5whi1vpFMgR6DJwfLeVPWR3OPE",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || appletConfig.authDomain || "omega-exchange-mxctm.firebaseapp.com",
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || undefined,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || appletConfig.projectId || "omega-exchange-mxctm",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || appletConfig.storageBucket || "omega-exchange-mxctm.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || appletConfig.messagingSenderId || "37565147035",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || appletConfig.appId || "1:37565147035:web:a8113400f7b8f01f39233e",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || appletConfig.measurementId || "",
 };
-
-if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-  // Fails loudly at startup instead of a cryptic Firebase SDK error later.
-  throw new Error(
-    "Missing Firebase config. Set VITE_FIREBASE_* environment variables — see .env.example."
-  );
-}
 
 export const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const auth = getAuth(app);

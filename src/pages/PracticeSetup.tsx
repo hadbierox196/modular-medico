@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronLeft, ArrowRight, ListChecks, Grid3x3, Infinity as InfinityIcon, Timer, HelpCircle, Lock } from "lucide-react";
+import {
+  ChevronLeft,
+  ArrowRight,
+  ListChecks,
+  Grid3x3,
+  Infinity as InfinityIcon,
+  Timer,
+  HelpCircle,
+  Lock,
+  Clock,
+  Sliders,
+} from "lucide-react";
 import Card from "../components/Card";
 import Pill from "../components/Pill";
 import Btn from "../components/Btn";
@@ -9,8 +20,22 @@ import Toggle from "../components/Toggle";
 import { THEME, FONT_DISPLAY } from "../theme";
 import { useAppStore, useIsLoggedIn, useIsPremium } from "../store/useAppStore";
 import { SUBJECT_META, isSubjectId, DEFAULT_BLOCK_DEFINITIONS, type BlockDefinition } from "../data/subjects";
-import { subscribeBlockDefinitions, fetchPublishedBlock, fetchPublishedBlockExam, fetchPublishedModuleExam } from "../services/adminContent";
+import {
+  subscribeBlockDefinitions,
+  fetchPublishedBlock,
+  fetchPublishedBlockExam,
+  fetchPublishedModuleExam,
+} from "../services/adminContent";
 import type { Difficulty, PracticeConfig } from "../types";
+
+const TIMER_PRESETS = [
+  { label: "3 min", seconds: 180 },
+  { label: "5 min", seconds: 300 },
+  { label: "10 min", seconds: 600 },
+  { label: "15 min", seconds: 900 },
+  { label: "30 min", seconds: 1800 },
+  { label: "60 min", seconds: 3600 },
+];
 
 export default function PracticeSetup() {
   const navigate = useNavigate();
@@ -26,6 +51,10 @@ export default function PracticeSetup() {
   const [blockDefs, setBlockDefs] = useState<BlockDefinition[]>(DEFAULT_BLOCK_DEFINITIONS);
   const [mode, setMode] = useState<"traditional" | "omr" | "exam">("traditional");
   const [timing, setTiming] = useState<"untimed" | "timed">("untimed");
+  const [timerSeconds, setTimerSeconds] = useState<number>(300); // default 5 minutes
+  const [customMinutes, setCustomMinutes] = useState<string>("5");
+  const [isCustomTimer, setIsCustomTimer] = useState(false);
+
   const [spacedRep, setSpacedRep] = useState(true);
   const [difficulty, setDifficulty] = useState<Difficulty | "all">("all");
   const [showInfo, setShowInfo] = useState(false);
@@ -52,9 +81,9 @@ export default function PracticeSetup() {
   const isSubjectInModule = isSubjectId(subjectId);
 
   const moduleDisplayName = isFullBlock
-    ? `${blockDef?.title || `Block ${block}`} (All Modules & Subjects)`
+    ? `${blockDef?.title || `Block ${block}`} (All Modules)`
     : isModuleExam
-    ? `${targetModule?.name || moduleId} (All Subjects)`
+    ? `${targetModule?.name || moduleId}`
     : `${SUBJECT_META[subjectId as keyof typeof SUBJECT_META]?.label || subjectId} \u00b7 ${targetModule?.name || `Block ${block}`}`;
 
   const locked = block !== 1 && !isPremium;
@@ -62,32 +91,44 @@ export default function PracticeSetup() {
   useEffect(() => {
     if (locked) return;
     if (isFullBlock) {
-      fetchPublishedBlockExam(block).then((qs) => setCount(qs.length));
+      fetchPublishedBlockExam(block).then((qs) => {
+        setCount(qs.length);
+        if (mode === "exam") setTimerSeconds(qs.length * 60);
+      });
     } else if (isModuleExam) {
-      fetchPublishedModuleExam(block, moduleId).then((qs) => setCount(qs.length));
+      fetchPublishedModuleExam(block, moduleId).then((qs) => {
+        setCount(qs.length);
+        if (mode === "exam") setTimerSeconds(qs.length * 60);
+      });
     } else if (isSubjectInModule) {
-      fetchPublishedBlock(subjectId, moduleId, block).then((qs) => setCount(qs.length));
+      fetchPublishedBlock(subjectId, moduleId, block).then((qs) => {
+        setCount(qs.length);
+        if (mode === "exam") setTimerSeconds(qs.length * 60);
+      });
     }
-  }, [locked, subjectId, moduleId, block, isFullBlock, isModuleExam, isSubjectInModule]);
+  }, [locked, subjectId, moduleId, block, isFullBlock, isModuleExam, isSubjectInModule, mode]);
 
   if (!Number.isInteger(block) || (!isFullBlock && !isModuleExam && !isSubjectInModule)) {
     return (
       <div className="py-16 text-center">
-        <p style={{ color: t.textMuted }}>That block session couldn't be found.</p>
+        <p style={{ color: t.textMuted }}>That session couldn't be found.</p>
         <button onClick={() => navigate("/subjects")} className="mt-3 text-sm font-bold" style={{ color: t.teal }}>
-          Back to curriculum explorer
+          Back to library
         </button>
       </div>
     );
   }
 
+  // Fixed Lock Screen (Requirement 10)
   if (locked) {
     return (
       <div className="mx-auto flex max-w-sm flex-col items-center gap-4 py-16 text-center">
-        <Lock size={26} color={t.gold} />
-        <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 20 }}>Unlock Block {block}</h1>
-        <p style={{ color: t.textMuted, fontSize: 14 }}>
-          Block 1 of every module is open by default. Unlock complete access for all blocks (1–15).
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg" style={{ backgroundColor: `${t.gold}25` }}>
+          <Lock size={28} color={t.gold} strokeWidth={2.5} />
+        </div>
+        <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22 }}>Unlock Block {block}</h1>
+        <p style={{ color: t.textMuted, fontSize: 14, lineHeight: 1.5 }}>
+          Block 1 is open for free trial practice. Unlock full access to Blocks 1–15 and custom exams.
         </p>
         <Btn t={t} onClick={() => navigate(isLoggedIn ? "/paywall" : "/signup")}>
           {isLoggedIn ? "Unlock Full Access" : "Create Free Account"}
@@ -110,9 +151,18 @@ export default function PracticeSetup() {
     setLoading(false);
     if (questions.length === 0) return;
 
-    const config: PracticeConfig = { mode, timing, spacedRep, difficultyFilter: difficulty };
+    const finalTimerSeconds = timing === "timed" ? (isCustomTimer ? (parseInt(customMinutes, 10) || 5) * 60 : timerSeconds) : null;
+
+    const config: PracticeConfig = {
+      mode,
+      timing,
+      customTimerSeconds: finalTimerSeconds,
+      spacedRep,
+      difficultyFilter: difficulty,
+    };
+
     const title = isFullBlock
-      ? `Block ${block}: Comprehensive Exam`
+      ? `Block ${block}: Full Exam`
       : isModuleExam
       ? `Block ${block} \u00b7 ${targetModule?.name || moduleId}`
       : `${SUBJECT_META[subjectId as keyof typeof SUBJECT_META]?.label || ""} (${targetModule?.name || `B${block}`})`;
@@ -133,18 +183,19 @@ export default function PracticeSetup() {
 
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-5">
+      {/* Clean Back Link (Requirement 7) */}
       <button
         onClick={() => navigate("/subjects?view=block")}
-        className="flex items-center gap-1 text-sm font-bold"
+        className="flex items-center gap-1.5 text-xs font-bold transition-opacity hover:opacity-75"
         style={{ color: t.textMuted }}
       >
-        <ChevronLeft size={15} /> Curriculum Explorer
+        <ChevronLeft size={16} /> Back to Library
       </button>
 
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <Pill t={t} tone="teal">
-            Block {block}: {blockDef?.title}
+            Block {block}
           </Pill>
           {targetModule && (
             <Pill t={t} tone="purple">
@@ -152,47 +203,121 @@ export default function PracticeSetup() {
             </Pill>
           )}
         </div>
-        <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, marginTop: 10 }}>
+        <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, marginTop: 8 }}>
           {moduleDisplayName}
         </h1>
         <p style={{ color: t.textMuted, fontSize: 13.5, marginTop: 2 }}>
-          {count === null ? "Checking questions\u2026" : `${count} question${count !== 1 ? "s" : ""} ready for practice`}
+          {count === null ? "Checking questions\u2026" : `${count} question${count !== 1 ? "s" : ""} available`}
         </p>
       </div>
 
-      <Card t={t} className="flex flex-col gap-5">
+      <Card t={t} className="flex flex-col gap-5 p-6" style={{ backgroundColor: t.surface, border: `1.5px solid ${t.border}` }}>
+        {/* Practice Mode */}
         <div>
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>Format</span>
+          <span className="mb-2 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
+            Practice Format
+          </span>
           <Segmented
             t={t}
             value={mode}
             onChange={(v) => setMode(v as "traditional" | "omr" | "exam")}
             options={[
               { value: "traditional", label: "Traditional", icon: ListChecks },
-              { value: "omr", label: "OMR sheet", icon: Grid3x3 },
+              { value: "omr", label: "OMR Sheet", icon: Grid3x3 },
               { value: "exam", label: "Mock Exam", icon: Timer },
             ]}
           />
           {mode === "exam" && (
             <p className="mt-2 text-xs" style={{ color: t.gold }}>
-              Exam mode mimics real test conditions: strict timer, locked feedback, and no repetition.
+              Mock Exam mode enforces strict timer countdown and delays answers until submission.
             </p>
           )}
         </div>
-        <div style={{ opacity: mode === "exam" ? 0.5 : 1, pointerEvents: mode === "exam" ? "none" : "auto" }}>
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>Timing</span>
+
+        {/* Timing Mode & Timer Adjuster (Requirement 8) */}
+        <div style={{ opacity: mode === "exam" ? 0.75 : 1 }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
+              Timer Control
+            </span>
+            {timing === "timed" && (
+              <span className="text-xs font-mono font-bold" style={{ color: t.teal }}>
+                {isCustomTimer ? `${customMinutes} minutes` : `${Math.round(timerSeconds / 60)} minutes`}
+              </span>
+            )}
+          </div>
+
           <Segmented
             t={t}
             value={timing}
             onChange={(v) => setTiming(v as "untimed" | "timed")}
             options={[
               { value: "untimed", label: "Untimed", icon: InfinityIcon },
-              { value: "timed", label: mode === "exam" ? "Timed (Strict)" : "Timed (5 min)", icon: Timer },
+              { value: "timed", label: "Timed Session", icon: Timer },
             ]}
           />
+
+          {/* Timer Duration Adjustment Subpanel */}
+          {timing === "timed" && (
+            <div className="mt-3 flex flex-col gap-2.5 rounded-xl p-3.5" style={{ backgroundColor: t.surfaceAlt }}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase" style={{ color: t.textMuted }}>
+                  Set Time Limit:
+                </span>
+                <button
+                  onClick={() => setIsCustomTimer(!isCustomTimer)}
+                  className="text-[11px] font-bold underline"
+                  style={{ color: t.purple }}
+                >
+                  {isCustomTimer ? "Use standard presets" : "Enter custom minutes"}
+                </button>
+              </div>
+
+              {!isCustomTimer ? (
+                <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+                  {TIMER_PRESETS.map((preset) => {
+                    const active = timerSeconds === preset.seconds;
+                    return (
+                      <button
+                        key={preset.seconds}
+                        onClick={() => setTimerSeconds(preset.seconds)}
+                        className="rounded-lg py-1.5 text-xs font-bold transition-all text-center"
+                        style={{
+                          backgroundColor: active ? t.purpleStrong : t.surface,
+                          color: active ? "#fff" : t.textMuted,
+                          border: `1px solid ${active ? t.purpleStrong : t.border}`,
+                        }}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Clock size={16} color={t.teal} />
+                  <input
+                    type="number"
+                    min="1"
+                    max="180"
+                    value={customMinutes}
+                    onChange={(e) => setCustomMinutes(e.target.value)}
+                    placeholder="e.g. 20"
+                    className="w-24 rounded-lg px-3 py-1.5 text-xs font-bold outline-none"
+                    style={{ backgroundColor: t.surface, border: `1.5px solid ${t.border}`, color: t.text }}
+                  />
+                  <span className="text-xs" style={{ color: t.textMuted }}>Minutes total duration</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* Difficulty */}
         <div>
-          <span className="mb-2 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>Difficulty</span>
+          <span className="mb-2 block text-xs font-bold uppercase tracking-wide" style={{ color: t.textFaint }}>
+            Difficulty
+          </span>
           <div className="flex flex-wrap gap-2">
             {(["all", "easy", "medium", "hard"] as const).map((d) => (
               <Pill
@@ -202,27 +327,31 @@ export default function PracticeSetup() {
                 active={difficulty === d}
                 onClick={() => setDifficulty(d)}
               >
-                {d === "all" ? "All" : d}
+                {d === "all" ? "All Difficulties" : d}
               </Pill>
             ))}
           </div>
         </div>
+
+        {/* Spaced Repetition */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <span className="text-sm font-bold">Spaced repetition</span>
-            <button onClick={() => setShowInfo(!showInfo)}><HelpCircle size={14} color={t.textFaint} /></button>
+            <span className="text-sm font-bold">Spaced Repetition</span>
+            <button onClick={() => setShowInfo(!showInfo)}>
+              <HelpCircle size={14} color={t.textFaint} />
+            </button>
           </div>
           <Toggle t={t} checked={spacedRep} onChange={setSpacedRep} />
         </div>
         {showInfo && (
           <p className="-mt-3 rounded-xl p-3 text-xs" style={{ backgroundColor: t.surfaceAlt, color: t.textMuted, lineHeight: 1.5 }}>
-            Questions answered incorrectly are intelligently rescheduled for review before the session concludes.
+            Incorrectly answered questions are intelligently rescheduled later in the session for reinforcement.
           </p>
         )}
       </Card>
 
       <Btn t={t} full icon={ArrowRight} disabled={loading || count === 0} onClick={start}>
-        {loading ? "Loading\u2026" : count === 0 ? "No published questions in this set yet" : `Start Practice Session`}
+        {loading ? "Preparing session\u2026" : count === 0 ? "No published questions yet" : `Start Practice Session`}
       </Btn>
     </div>
   );

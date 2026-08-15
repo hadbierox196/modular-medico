@@ -36,13 +36,22 @@ export default function Practice() {
   const [selected, setSelected] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState<number | null>(
-    session?.config.mode === "exam" ? session.queue.length * 60 : session?.config.timing === "timed" ? 300 : null
-  );
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(() => {
+    if (!session) return null;
+    if (session.config.customTimerSeconds) return session.config.customTimerSeconds;
+    if (session.config.mode === "exam") return session.queue.length * 60;
+    if (session.config.timing === "timed") return 300;
+    return null;
+  });
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
   const [finishing, setFinishing] = useState(false);
 
+  const addTimeSeconds = (sec: number) => {
+    setSecondsLeft((curr) => (curr === null ? sec : curr + sec));
+  };
+
   useEffect(() => {
-    if (secondsLeft === null || finishing) return;
+    if (secondsLeft === null || finishing || isTimerPaused) return;
     if (secondsLeft <= 0) {
       finishNow();
       return;
@@ -50,7 +59,7 @@ export default function Practice() {
     const id = setTimeout(() => setSecondsLeft((s) => (s === null ? null : s - 1)), 1000);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [secondsLeft, finishing]);
+  }, [secondsLeft, finishing, isTimerPaused]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -257,10 +266,22 @@ export default function Practice() {
             <div className="p-4 border-b flex justify-between items-center bg-opacity-50" style={{ borderColor: t.border, backgroundColor: t.surfaceAlt }}>
               <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15 }}>Bubble Sheet</span>
               {mm ? (
-                <span style={{ fontFamily: FONT_MONO, fontSize: 13, color: secondsLeft! < 30 ? t.red : t.textMuted }}>
-                  <Clock size={12} className="mr-1 inline" />
-                  {mm}:{ss}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span style={{ fontFamily: FONT_MONO, fontSize: 13, color: secondsLeft! < 30 ? t.red : t.textMuted }}>
+                    <Clock size={12} className="mr-1 inline" />
+                    {mm}:{ss}
+                  </span>
+                  {config.mode !== "exam" && (
+                    <button
+                      onClick={() => addTimeSeconds(60)}
+                      className="rounded px-1.5 py-0.5 text-[10px] font-bold hover:opacity-80"
+                      style={{ backgroundColor: `${t.teal}20`, color: t.teal }}
+                      title="Add 1 minute"
+                    >
+                      +1m
+                    </button>
+                  )}
+                </div>
               ) : (
                 <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: t.textFaint }}>Untimed</span>
               )}
@@ -325,10 +346,32 @@ export default function Practice() {
         </span>
         <div className="flex items-center gap-3">
           {mm && (
-            <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: secondsLeft! < 30 ? t.red : t.textMuted }}>
-              <Clock size={12} className="mr-1 inline" />
-              {mm}:{ss}
-            </span>
+            <div className="flex items-center gap-1.5 rounded-xl px-2 py-1" style={{ backgroundColor: t.surfaceAlt }}>
+              <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: secondsLeft! < 30 ? t.red : t.textMuted }}>
+                <Clock size={12} className="mr-1 inline" />
+                {mm}:{ss}
+              </span>
+              {config.mode !== "exam" && (
+                <div className="flex items-center gap-1 ml-1 border-l pl-1.5" style={{ borderColor: t.border }}>
+                  <button
+                    onClick={() => addTimeSeconds(60)}
+                    className="rounded px-1 text-[10px] font-bold hover:opacity-80"
+                    style={{ backgroundColor: `${t.teal}20`, color: t.teal }}
+                    title="Add 1 minute"
+                  >
+                    +1m
+                  </button>
+                  <button
+                    onClick={() => addTimeSeconds(300)}
+                    className="rounded px-1 text-[10px] font-bold hover:opacity-80"
+                    style={{ backgroundColor: `${t.purple}20`, color: t.purple }}
+                    title="Add 5 minutes"
+                  >
+                    +5m
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           {!mm && ExitAndFinishBar}
           <button onClick={toggleBookmark} disabled={!uid} title={uid ? "Bookmark" : "Log in to bookmark"}>

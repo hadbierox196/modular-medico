@@ -241,19 +241,49 @@ export async function updateQuestionStatus(id: string, status: QuestionStatus) {
   }
 }
 
-export async function deleteQuestion(id: string) {
+const LOCAL_DELETED_QS_KEY = "modular_medico_deleted_qs";
+
+function getDeletedQuestionIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(LOCAL_DELETED_QS_KEY);
+    if (raw) return new Set(JSON.parse(raw));
+  } catch {
+    // ignore
+  }
+  return new Set();
+}
+
+function markQuestionDeleted(idOrText: string) {
+  try {
+    const current = getDeletedQuestionIds();
+    current.add(idOrText.toLowerCase().trim());
+    localStorage.setItem(LOCAL_DELETED_QS_KEY, JSON.stringify(Array.from(current)));
+  } catch {
+    // ignore
+  }
+}
+
+export async function deleteQuestion(id: string, qText?: string) {
+  if (id) markQuestionDeleted(id);
+  if (qText) markQuestionDeleted(qText);
+
+  // Update local storage
+  const localQuestions: FirestoreQuestion[] = JSON.parse(localStorage.getItem("modular_medico_local_qs") || "[]");
+  const filtered = localQuestions.filter((q) => q.id !== id && (qText ? q.q.trim().toLowerCase() !== qText.trim().toLowerCase() : true));
+  localStorage.setItem("modular_medico_local_qs", JSON.stringify(filtered));
+
   try {
     await deleteDoc(doc(db, "questions", id));
   } catch (err) {
     console.warn("Firestore deleteQuestion failed:", err);
-    const localQuestions: FirestoreQuestion[] = JSON.parse(localStorage.getItem("modular_medico_local_qs") || "[]");
-    localStorage.setItem("modular_medico_local_qs", JSON.stringify(localQuestions.filter((q) => q.id !== id)));
   }
 }
 
 function getLocalQuestions(): FirestoreQuestion[] {
   try {
-    return JSON.parse(localStorage.getItem("modular_medico_local_qs") || "[]");
+    const deleted = getDeletedQuestionIds();
+    const list: FirestoreQuestion[] = JSON.parse(localStorage.getItem("modular_medico_local_qs") || "[]");
+    return list.filter((q) => !deleted.has(q.id.toLowerCase().trim()) && !deleted.has(q.q.toLowerCase().trim()));
   } catch {
     return [];
   }
@@ -261,6 +291,7 @@ function getLocalQuestions(): FirestoreQuestion[] {
 
 /** Live view of questions for a subject */
 export function subscribeSubjectQuestions(subjectId: string, cb: (questions: FirestoreQuestion[]) => void) {
+  const deleted = getDeletedQuestionIds();
   const q = query(collection(db, "questions"), where("subjectId", "==", subjectId));
   return onSnapshot(
     q,
@@ -270,9 +301,21 @@ export function subscribeSubjectQuestions(subjectId: string, cb: (questions: Fir
       const localQs = getLocalQuestions().filter((lq) => lq.subjectId === subjectId);
 
       const map = new Map<string, FirestoreQuestion>();
-      defQuestions.forEach((dq) => map.set(dq.q.trim().toLowerCase(), dq));
-      localQs.forEach((lq) => map.set(lq.q.trim().toLowerCase(), lq));
-      fsQuestions.forEach((fq) => map.set(fq.q.trim().toLowerCase(), fq));
+      defQuestions.forEach((dq) => {
+        if (!deleted.has(dq.id.toLowerCase().trim()) && !deleted.has(dq.q.toLowerCase().trim())) {
+          map.set(dq.q.trim().toLowerCase(), dq);
+        }
+      });
+      localQs.forEach((lq) => {
+        if (!deleted.has(lq.id.toLowerCase().trim()) && !deleted.has(lq.q.toLowerCase().trim())) {
+          map.set(lq.q.trim().toLowerCase(), lq);
+        }
+      });
+      fsQuestions.forEach((fq) => {
+        if (!deleted.has(fq.id.toLowerCase().trim()) && !deleted.has(fq.q.toLowerCase().trim())) {
+          map.set(fq.q.trim().toLowerCase(), fq);
+        }
+      });
 
       cb(Array.from(map.values()));
     },
@@ -281,8 +324,16 @@ export function subscribeSubjectQuestions(subjectId: string, cb: (questions: Fir
       const defQuestions = DEFAULT_QUESTIONS.filter((dq) => dq.subjectId === subjectId);
       const localQs = getLocalQuestions().filter((lq) => lq.subjectId === subjectId);
       const map = new Map<string, FirestoreQuestion>();
-      defQuestions.forEach((dq) => map.set(dq.q.trim().toLowerCase(), dq));
-      localQs.forEach((lq) => map.set(lq.q.trim().toLowerCase(), lq));
+      defQuestions.forEach((dq) => {
+        if (!deleted.has(dq.id.toLowerCase().trim()) && !deleted.has(dq.q.toLowerCase().trim())) {
+          map.set(dq.q.trim().toLowerCase(), dq);
+        }
+      });
+      localQs.forEach((lq) => {
+        if (!deleted.has(lq.id.toLowerCase().trim()) && !deleted.has(lq.q.toLowerCase().trim())) {
+          map.set(lq.q.trim().toLowerCase(), lq);
+        }
+      });
       cb(Array.from(map.values()));
     }
   );
@@ -293,22 +344,44 @@ export function subscribeAllQuestions(cb: (questions: FirestoreQuestion[]) => vo
   return onSnapshot(
     collection(db, "questions"),
     (snap) => {
+      const deleted = getDeletedQuestionIds();
       const fsQuestions = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<FirestoreQuestion, "id">) }));
       const localQs = getLocalQuestions();
 
       const map = new Map<string, FirestoreQuestion>();
-      DEFAULT_QUESTIONS.forEach((dq) => map.set(dq.q.trim().toLowerCase(), dq));
-      localQs.forEach((lq) => map.set(lq.q.trim().toLowerCase(), lq));
-      fsQuestions.forEach((fq) => map.set(fq.q.trim().toLowerCase(), fq));
+      DEFAULT_QUESTIONS.forEach((dq) => {
+        if (!deleted.has(dq.id.toLowerCase().trim()) && !deleted.has(dq.q.toLowerCase().trim())) {
+          map.set(dq.q.trim().toLowerCase(), dq);
+        }
+      });
+      localQs.forEach((lq) => {
+        if (!deleted.has(lq.id.toLowerCase().trim()) && !deleted.has(lq.q.toLowerCase().trim())) {
+          map.set(lq.q.trim().toLowerCase(), lq);
+        }
+      });
+      fsQuestions.forEach((fq) => {
+        if (!deleted.has(fq.id.toLowerCase().trim()) && !deleted.has(fq.q.toLowerCase().trim())) {
+          map.set(fq.q.trim().toLowerCase(), fq);
+        }
+      });
 
       cb(Array.from(map.values()));
     },
     (err) => {
       console.warn("Firestore all questions fallback:", err.message);
+      const deleted = getDeletedQuestionIds();
       const localQs = getLocalQuestions();
       const map = new Map<string, FirestoreQuestion>();
-      DEFAULT_QUESTIONS.forEach((dq) => map.set(dq.q.trim().toLowerCase(), dq));
-      localQs.forEach((lq) => map.set(lq.q.trim().toLowerCase(), lq));
+      DEFAULT_QUESTIONS.forEach((dq) => {
+        if (!deleted.has(dq.id.toLowerCase().trim()) && !deleted.has(dq.q.toLowerCase().trim())) {
+          map.set(dq.q.trim().toLowerCase(), dq);
+        }
+      });
+      localQs.forEach((lq) => {
+        if (!deleted.has(lq.id.toLowerCase().trim()) && !deleted.has(lq.q.toLowerCase().trim())) {
+          map.set(lq.q.trim().toLowerCase(), lq);
+        }
+      });
       cb(Array.from(map.values()));
     }
   );

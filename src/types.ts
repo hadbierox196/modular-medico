@@ -45,6 +45,9 @@ export interface AnswerRecord {
 export interface PracticeConfig {
   mode: "traditional" | "omr" | "exam";
   timing: "untimed" | "timed";
+  timerType?: "session" | "per_question";
+  customTimerSeconds?: number | null;
+  timerPerQuestionSeconds?: number;
   spacedRep: boolean;
   difficultyFilter: Difficulty | "all";
 }
@@ -104,4 +107,5 @@ export interface ImportResult {
   q?: string;
   options?: string[];
   correct?: number;
+  explanation?: string;
 }
